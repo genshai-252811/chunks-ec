@@ -40,10 +40,24 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const updateAudioLevel = useCallback(() => {
     if (analyzerRef.current) {
-      const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
-      analyzerRef.current.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-      audioLevelRef.current = average / 255;
+      // Use time domain data for more responsive amplitude detection
+      const dataArray = new Uint8Array(analyzerRef.current.fftSize);
+      analyzerRef.current.getByteTimeDomainData(dataArray);
+      
+      // Calculate RMS (root mean square) for better volume detection
+      let sumSquares = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const normalized = (dataArray[i] - 128) / 128; // Center around 0
+        sumSquares += normalized * normalized;
+      }
+      const rms = Math.sqrt(sumSquares / dataArray.length);
+      
+      // Apply a curve to make it more responsive at lower volumes
+      // and cap at 1.0. Multiply by 2.5 to boost sensitivity
+      const boostedLevel = Math.min(rms * 2.5, 1.0);
+      
+      // Smooth the transition slightly to avoid jitter
+      audioLevelRef.current = audioLevelRef.current * 0.3 + boostedLevel * 0.7;
     }
   }, []);
 
@@ -64,7 +78,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       audioContextRef.current = new AudioContext({ sampleRate: 44100 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyzerRef.current = audioContextRef.current.createAnalyser();
-      analyzerRef.current.fftSize = 256;
+      analyzerRef.current.fftSize = 512; // Larger FFT for smoother detection
+      analyzerRef.current.smoothingTimeConstant = 0.3; // Faster response
       source.connect(analyzerRef.current);
 
       // Start updating audio level

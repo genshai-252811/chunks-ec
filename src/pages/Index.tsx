@@ -6,7 +6,7 @@ import { Header } from '@/components/Header';
 import { RecordButton } from '@/components/RecordButton';
 import { ResultsView } from '@/components/ResultsView';
 import { CameraFeed } from '@/components/CameraFeed';
-import { RealtimeWaveform } from '@/components/RealtimeWaveform';
+import { FlowingWaveform } from '@/components/FlowingWaveform';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
@@ -135,9 +135,9 @@ const Index = () => {
             onStop={handleStopRecording}
           />
 
-          {/* Waveform */}
+          {/* Flowing Waveform */}
           <div className="w-full max-w-sm">
-            <RealtimeWaveform
+            <FlowingWaveform
               isRecording={isRecording}
               getAudioLevel={getAudioLevel}
             />
