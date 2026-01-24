@@ -82,6 +82,74 @@ const Index = () => {
     setCurrentSentence(getNextRandomSentence(currentSentence.id));
   }, [currentSentence.id]);
 
+  // Fullscreen recording mode
+  if (isRecording) {
+    return (
+      <div className="fixed inset-0 bg-black z-50">
+        {/* Fullscreen Camera */}
+        <CameraFeed 
+          autoStart={true}
+          isRecording={true}
+          audioLevel={audioLevel}
+          className="w-full h-full rounded-none"
+        />
+
+        {/* Minimal Timer - Top Center */}
+        <motion.div
+          className="absolute top-6 left-1/2 -translate-x-1/2 z-50"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center gap-2 bg-background/50 backdrop-blur-sm px-4 py-2 rounded-full">
+            <motion.div
+              className="w-2.5 h-2.5 rounded-full bg-destructive"
+              animate={{ opacity: [1, 0.3, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            />
+            <span className="text-foreground font-mono text-lg tracking-wider">
+              {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:
+              {String(recordingTime % 60).padStart(2, '0')}
+            </span>
+          </div>
+        </motion.div>
+
+        {/* Energy Icon - Top Right */}
+        <motion.div
+          className="absolute top-6 right-6 z-50"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+        >
+          <div className="bg-background/50 backdrop-blur-sm p-3 rounded-full">
+            <EnergyIcon audioLevel={audioLevel} size="lg" />
+          </div>
+        </motion.div>
+
+        {/* Waveform - Bottom */}
+        <div className="absolute bottom-28 left-6 right-6 z-40">
+          <RealtimeWaveform
+            isRecording={isRecording}
+            getAudioLevel={getAudioLevel}
+          />
+        </div>
+
+        {/* Stop Button - Bottom Center */}
+        <motion.div
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <RecordButton
+            isRecording={isRecording}
+            isProcessing={appState === 'processing'}
+            audioLevel={audioLevel}
+            onStart={handleStartRecording}
+            onStop={handleStopRecording}
+          />
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
       {/* Background Effects */}
@@ -103,7 +171,7 @@ const Index = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
               >
-                {/* Camera Preview - Always Visible */}
+                {/* Camera Preview */}
                 <motion.div
                   className="w-full aspect-[4/3] max-w-md relative"
                   initial={{ opacity: 0, y: 20 }}
@@ -112,49 +180,10 @@ const Index = () => {
                 >
                   <CameraFeed 
                     autoStart={true}
-                    isRecording={isRecording}
-                    audioLevel={audioLevel}
+                    isRecording={false}
+                    audioLevel={0}
                     className="w-full h-full"
                   />
-
-                  {/* Recording Overlay */}
-                  {isRecording && (
-                    <>
-                      {/* Timer Badge */}
-                      <motion.div
-                        className="absolute top-4 left-4 glass-card px-3 py-1.5 flex items-center gap-2"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                      >
-                        <motion.div
-                          className="w-2 h-2 rounded-full bg-destructive"
-                          animate={{ opacity: [1, 0.3, 1] }}
-                          transition={{ duration: 1, repeat: Infinity }}
-                        />
-                        <span className="text-sm font-mono">
-                          {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:
-                          {String(recordingTime % 60).padStart(2, '0')}
-                        </span>
-                      </motion.div>
-
-                      {/* Energy Icon Badge */}
-                      <motion.div
-                        className="absolute top-4 right-4 glass-card p-2"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                      >
-                        <EnergyIcon audioLevel={audioLevel} />
-                      </motion.div>
-
-                      {/* Waveform */}
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <RealtimeWaveform
-                          isRecording={isRecording}
-                          getAudioLevel={getAudioLevel}
-                        />
-                      </div>
-                    </>
-                  )}
                 </motion.div>
 
                 {/* Practice Sentence */}
@@ -166,23 +195,21 @@ const Index = () => {
                   <PracticeSentence
                     sentence={currentSentence}
                     onRefresh={handleRefreshSentence}
-                    isRecording={isRecording}
+                    isRecording={false}
                   />
                 </motion.div>
 
-                {/* Audio Visualizer (idle only) */}
-                {!isRecording && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    <AudioVisualizer
-                      isRecording={isRecording}
-                      getAudioLevel={getAudioLevel}
-                    />
-                  </motion.div>
-                )}
+                {/* Audio Visualizer */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <AudioVisualizer
+                    isRecording={false}
+                    getAudioLevel={getAudioLevel}
+                  />
+                </motion.div>
 
                 {/* Record Button */}
                 <motion.div
@@ -191,7 +218,7 @@ const Index = () => {
                   transition={{ delay: 0.4, type: 'spring' }}
                 >
                   <RecordButton
-                    isRecording={isRecording}
+                    isRecording={false}
                     isProcessing={appState === 'processing'}
                     audioLevel={audioLevel}
                     onStart={handleStartRecording}
