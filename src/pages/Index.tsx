@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { RecordButton } from '@/components/RecordButton';
@@ -167,22 +167,37 @@ const Index = () => {
                   {/* Compact Sentence */}
                   <div className="text-center">
                     {sentencesLoading ? <p className="text-lg font-medium text-muted-foreground">Loading...</p> : currentSentence ? <>
-                        <div className="flex items-center justify-center gap-2">
-                          <p className="text-lg font-medium text-foreground line-clamp-2">
-                            {currentSentence.vietnamese}
-                          </p>
-                          <Button variant="ghost" size="sm" onClick={handleRefreshSentence} className="text-xs text-primary hover:text-primary/80">
-                            Next →
-                          </Button>
-                        </div>
+                        <p className="text-lg font-medium text-foreground line-clamp-2">
+                          {currentSentence.vietnamese}
+                        </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Say it in English
                         </p>
                       </> : <p className="text-muted-foreground">No sentences available</p>}
                   </div>
 
-                  {/* Record Button */}
-                  <RecordButton isRecording={false} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
+                  {/* Record Button with Navigation */}
+                  <div className="flex items-center gap-4">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={handleRefreshSentence}
+                      className="rounded-full text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                    
+                    <RecordButton isRecording={false} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={handleRefreshSentence}
+                      className="rounded-full text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </Button>
+                  </div>
 
                   {/* Error */}
                   {error && <p className="text-destructive text-xs text-center">{error}</p>}
