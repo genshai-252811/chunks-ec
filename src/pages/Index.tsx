@@ -88,10 +88,9 @@ const Index = () => {
       <div className="fixed inset-0 bg-black z-50">
         {/* Fullscreen Camera */}
         <CameraFeed 
-          autoStart={true}
           isRecording={true}
           audioLevel={audioLevel}
-          className="w-full h-full rounded-none"
+          fullscreen={true}
         />
 
         {/* Minimal Timer - Top Center */}
@@ -179,7 +178,6 @@ const Index = () => {
                   transition={{ delay: 0.1 }}
                 >
                   <CameraFeed 
-                    autoStart={true}
                     isRecording={false}
                     audioLevel={0}
                     className="w-full h-full"
