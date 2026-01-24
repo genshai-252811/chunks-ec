@@ -12,16 +12,16 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { Button } from '@/components/ui/button';
-
 type AppState = 'idle' | 'recording' | 'processing' | 'results';
-
 const Index = () => {
   const [appState, setAppState] = useState<AppState>('idle');
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  
-  const { currentSentence, getNextSentence, isLoading: sentencesLoading } = useSentences();
-
+  const {
+    currentSentence,
+    getNextSentence,
+    isLoading: sentencesLoading
+  } = useSentences();
   const {
     isRecording,
     recordingTime,
@@ -32,17 +32,15 @@ const Index = () => {
     startRecording,
     stopRecording,
     resetRecording,
-    getAudioLevel,
+    getAudioLevel
   } = useAudioRecorder();
 
   // Update audio level for visualization
   useEffect(() => {
     if (!isRecording) return;
-
     const interval = setInterval(() => {
       setAudioLevel(getAudioLevel());
     }, 50);
-
     return () => clearInterval(interval);
   }, [isRecording, getAudioLevel]);
 
@@ -51,62 +49,54 @@ const Index = () => {
     const processAudio = async () => {
       if (audioBuffer && appState === 'processing') {
         const analysisResults = await analyzeAudioAsync(audioBuffer, sampleRate, audioBase64 || undefined);
-
         setTimeout(() => {
           setResults(analysisResults);
           setAppState('results');
         }, 500);
       }
     };
-
     processAudio();
   }, [audioBuffer, audioBase64, sampleRate, appState]);
-
   const handleStartRecording = useCallback(async () => {
     setResults(null);
     await startRecording();
     setAppState('recording');
   }, [startRecording]);
-
   const handleStopRecording = useCallback(async () => {
     setAppState('processing');
     await stopRecording();
   }, [stopRecording]);
-
   const handleRetry = useCallback(() => {
     resetRecording();
     setResults(null);
     setAppState('idle');
     getNextSentence();
   }, [resetRecording, getNextSentence]);
-
   const handleRefreshSentence = useCallback(() => {
     getNextSentence();
   }, [getNextSentence]);
 
   // Fullscreen recording mode
   if (isRecording) {
-    return (
-      <div className="fixed inset-0 bg-black z-50">
+    return <div className="fixed inset-0 bg-black z-50">
         {/* Fullscreen Camera */}
-        <CameraFeed 
-          isRecording={true}
-          audioLevel={audioLevel}
-          fullscreen={true}
-        />
+        <CameraFeed isRecording={true} audioLevel={audioLevel} fullscreen={true} />
 
         {/* Minimal Timer - Top Center */}
-        <motion.div
-          className="absolute top-6 left-1/2 -translate-x-1/2 z-50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div className="absolute top-6 left-1/2 -translate-x-1/2 z-50" initial={{
+        opacity: 0,
+        y: -20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }}>
           <div className="flex items-center gap-2 bg-background/50 backdrop-blur-sm px-4 py-2 rounded-full">
-            <motion.div
-              className="w-2.5 h-2.5 rounded-full bg-destructive"
-              animate={{ opacity: [1, 0.3, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
+            <motion.div className="w-2.5 h-2.5 rounded-full bg-destructive" animate={{
+            opacity: [1, 0.3, 1]
+          }} transition={{
+            duration: 1,
+            repeat: Infinity
+          }} />
             <span className="text-foreground font-mono text-lg tracking-wider">
               {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:
               {String(recordingTime % 60).padStart(2, '0')}
@@ -115,40 +105,31 @@ const Index = () => {
         </motion.div>
 
         {/* Energy Meter - Top Right */}
-        <motion.div
-          className="absolute top-6 right-6 left-6 z-50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <motion.div className="absolute top-6 right-6 left-6 z-50" initial={{
+        opacity: 0,
+        y: -20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.2
+      }}>
           <EnergyMeter audioLevel={audioLevel} />
         </motion.div>
 
         {/* Bottom Controls - Stop Button + Waveform */}
         <div className="absolute bottom-6 left-4 right-4 z-50 flex flex-col items-center gap-4">
           {/* Stop Button */}
-          <RecordButton
-            isRecording={isRecording}
-            isProcessing={appState === 'processing'}
-            audioLevel={audioLevel}
-            onStart={handleStartRecording}
-            onStop={handleStopRecording}
-          />
+          <RecordButton isRecording={isRecording} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
 
           {/* Flowing Waveform */}
           <div className="w-full max-w-sm">
-            <FlowingWaveform
-              isRecording={isRecording}
-              getAudioLevel={getAudioLevel}
-            />
+            <FlowingWaveform isRecording={isRecording} getAudioLevel={getAudioLevel} />
           </div>
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen bg-background text-foreground overflow-hidden">
+  return <div className="min-h-screen bg-background text-foreground overflow-hidden">
       {/* Background Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
@@ -157,7 +138,7 @@ const Index = () => {
 
       <div className="relative z-10 h-screen flex flex-col">
         {/* Header with Settings */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-0">
           <Header />
           <Link to="/settings">
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -168,86 +149,58 @@ const Index = () => {
 
         <main className="flex-1 flex flex-col overflow-hidden">
           <AnimatePresence mode="wait">
-            {appState !== 'results' ? (
-              <motion.div
-                key="main"
-                className="flex-1 flex flex-col"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-              >
+            {appState !== 'results' ? <motion.div key="main" className="flex-1 flex flex-col" initial={{
+            opacity: 0
+          }} animate={{
+            opacity: 1
+          }} exit={{
+            opacity: 0,
+            scale: 0.95
+          }}>
                 {/* Camera - 80% */}
                 <div className="flex-[4] min-h-0 p-2">
-                  <CameraFeed 
-                    isRecording={false}
-                    audioLevel={0}
-                    className="w-full h-full"
-                  />
+                  <CameraFeed isRecording={false} audioLevel={0} className="w-full h-full" />
                 </div>
 
                 {/* Bottom Section - 20% */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-2 bg-background/80 backdrop-blur-sm">
                   {/* Compact Sentence */}
                   <div className="text-center">
-                    {sentencesLoading ? (
-                      <p className="text-lg font-medium text-muted-foreground">Loading...</p>
-                    ) : currentSentence ? (
-                      <>
+                    {sentencesLoading ? <p className="text-lg font-medium text-muted-foreground">Loading...</p> : currentSentence ? <>
                         <div className="flex items-center justify-center gap-2">
                           <p className="text-lg font-medium text-foreground line-clamp-2">
                             {currentSentence.vietnamese}
                           </p>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={handleRefreshSentence}
-                            className="text-xs text-primary hover:text-primary/80"
-                          >
+                          <Button variant="ghost" size="sm" onClick={handleRefreshSentence} className="text-xs text-primary hover:text-primary/80">
                             Next →
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Say it in English
                         </p>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground">No sentences available</p>
-                    )}
+                      </> : <p className="text-muted-foreground">No sentences available</p>}
                   </div>
 
                   {/* Record Button */}
-                  <RecordButton
-                    isRecording={false}
-                    isProcessing={appState === 'processing'}
-                    audioLevel={audioLevel}
-                    onStart={handleStartRecording}
-                    onStop={handleStopRecording}
-                  />
+                  <RecordButton isRecording={false} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
 
                   {/* Error */}
-                  {error && (
-                    <p className="text-destructive text-xs text-center">{error}</p>
-                  )}
+                  {error && <p className="text-destructive text-xs text-center">{error}</p>}
                 </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="results"
-                className="flex-1 overflow-auto"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                {results && (
-                  <ResultsView results={results} onRetry={handleRetry} />
-                )}
-              </motion.div>
-            )}
+              </motion.div> : <motion.div key="results" className="flex-1 overflow-auto" initial={{
+            opacity: 0,
+            y: 20
+          }} animate={{
+            opacity: 1,
+            y: 0
+          }} exit={{
+            opacity: 0
+          }}>
+                {results && <ResultsView results={results} onRetry={handleRetry} />}
+              </motion.div>}
           </AnimatePresence>
         </main>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
