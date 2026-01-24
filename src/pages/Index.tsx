@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { RecordButton } from '@/components/RecordButton';
-import { AudioVisualizer } from '@/components/AudioVisualizer';
 import { ResultsView } from '@/components/ResultsView';
 import { CameraFeed } from '@/components/CameraFeed';
-import { PracticeSentence } from '@/components/PracticeSentence';
 import { RealtimeWaveform } from '@/components/RealtimeWaveform';
-import { EnergyIcon } from '@/components/EnergyIcon';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useSentences } from '@/hooks/useSentences';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
-import { getRandomSentence, getNextRandomSentence, Sentence } from '@/lib/sentenceBank';
+import { Button } from '@/components/ui/button';
 
 type AppState = 'idle' | 'recording' | 'processing' | 'results';
 
@@ -19,7 +19,8 @@ const Index = () => {
   const [appState, setAppState] = useState<AppState>('idle');
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [currentSentence, setCurrentSentence] = useState<Sentence>(getRandomSentence());
+  
+  const { currentSentence, getNextSentence, isLoading: sentencesLoading } = useSentences();
 
   const {
     isRecording,
@@ -76,12 +77,12 @@ const Index = () => {
     resetRecording();
     setResults(null);
     setAppState('idle');
-    setCurrentSentence(getNextRandomSentence(currentSentence.id));
-  }, [resetRecording, currentSentence.id]);
+    getNextSentence();
+  }, [resetRecording, getNextSentence]);
 
   const handleRefreshSentence = useCallback(() => {
-    setCurrentSentence(getNextRandomSentence(currentSentence.id));
-  }, [currentSentence.id]);
+    getNextSentence();
+  }, [getNextSentence]);
 
   // Fullscreen recording mode
   if (isRecording) {
@@ -155,8 +156,15 @@ const Index = () => {
       </div>
 
       <div className="relative z-10 h-screen flex flex-col">
-        {/* Header - minimal */}
-        <Header />
+        {/* Header with Settings */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <Header />
+          <Link to="/settings">
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <Settings className="w-5 h-5" />
+            </Button>
+          </Link>
+        </div>
 
         <main className="flex-1 flex flex-col overflow-hidden">
           <AnimatePresence mode="wait">
@@ -181,12 +189,30 @@ const Index = () => {
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-2 bg-background/80 backdrop-blur-sm">
                   {/* Compact Sentence */}
                   <div className="text-center">
-                    <p className="text-lg font-medium text-foreground line-clamp-2">
-                      {currentSentence.vietnamese}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Say it in English
-                    </p>
+                    {sentencesLoading ? (
+                      <p className="text-lg font-medium text-muted-foreground">Loading...</p>
+                    ) : currentSentence ? (
+                      <>
+                        <div className="flex items-center justify-center gap-2">
+                          <p className="text-lg font-medium text-foreground line-clamp-2">
+                            {currentSentence.vietnamese}
+                          </p>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={handleRefreshSentence}
+                            className="text-xs text-primary hover:text-primary/80"
+                          >
+                            Next →
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Say it in English
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">No sentences available</p>
+                    )}
                   </div>
 
                   {/* Record Button */}
