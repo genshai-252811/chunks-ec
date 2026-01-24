@@ -14,6 +14,7 @@ interface DisplaySettings {
   quiet_threshold: number;
   good_threshold: number;
   powerful_threshold: number;
+  sensitivity: number;
 }
 
 interface MetricSetting {
@@ -82,6 +83,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   quiet_threshold: 0.3,
   good_threshold: 0.6,
   powerful_threshold: 0.8,
+  sensitivity: 2.5,
 };
 
 const Settings = () => {
@@ -116,6 +118,7 @@ const Settings = () => {
           quiet_threshold: Number(data.quiet_threshold),
           good_threshold: Number(data.good_threshold),
           powerful_threshold: Number(data.powerful_threshold),
+          sensitivity: Number(data.sensitivity) || 2.5,
         });
       }
     } catch (err) {
@@ -209,6 +212,7 @@ const Settings = () => {
           quiet_threshold: displaySettings.quiet_threshold,
           good_threshold: displaySettings.good_threshold,
           powerful_threshold: displaySettings.powerful_threshold,
+          sensitivity: displaySettings.sensitivity,
           updated_at: new Date().toISOString(),
         })
         .eq('setting_key', 'energy_display');
@@ -542,6 +546,28 @@ const Settings = () => {
                     step={5}
                   />
                   <p className="text-xs text-muted-foreground">Above this level shows "Powerful" feedback</p>
+                </div>
+
+                {/* Sensitivity Slider */}
+                <div className="space-y-2 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">🎤 Microphone Sensitivity</Label>
+                    <span className="text-sm font-medium text-primary">{displaySettings.sensitivity.toFixed(1)}x</span>
+                  </div>
+                  <Slider
+                    value={[displaySettings.sensitivity * 10]}
+                    onValueChange={([value]) => updateDisplaySetting('sensitivity', value / 10)}
+                    max={50}
+                    min={5}
+                    step={5}
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Less sensitive</span>
+                    <span>More sensitive</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Adjust how responsive the energy meter is to your voice. Increase if speaking loudly doesn't register, decrease if it's always maxed out.
+                  </p>
                 </div>
               </div>
             </CollapsibleContent>

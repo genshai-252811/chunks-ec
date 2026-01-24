@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { getSensitivity } from './useDisplaySettings';
 
 interface AudioRecorderState {
   isRecording: boolean;
@@ -52,9 +53,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
       const rms = Math.sqrt(sumSquares / dataArray.length);
       
-      // Apply a curve to make it more responsive at lower volumes
-      // and cap at 1.0. Multiply by 2.5 to boost sensitivity
-      const boostedLevel = Math.min(rms * 2.5, 1.0);
+      // Get sensitivity from settings (default 2.5)
+      const sensitivity = getSensitivity();
+      
+      // Apply sensitivity multiplier and cap at 1.0
+      const boostedLevel = Math.min(rms * sensitivity, 1.0);
       
       // Smooth the transition slightly to avoid jitter
       audioLevelRef.current = audioLevelRef.current * 0.3 + boostedLevel * 0.7;
