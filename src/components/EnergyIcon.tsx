@@ -3,10 +3,13 @@ import { getEnergyLevel } from '@/lib/energyCalculator';
 
 interface EnergyIconProps {
   audioLevel: number;
+  size?: 'md' | 'lg';
 }
 
-export function EnergyIcon({ audioLevel }: EnergyIconProps) {
+export function EnergyIcon({ audioLevel, size = 'md' }: EnergyIconProps) {
   const energyLevel = getEnergyLevel(audioLevel);
+
+  const sizeClass = size === 'lg' ? 'text-6xl' : 'text-5xl';
 
   return (
     <motion.div
@@ -16,7 +19,7 @@ export function EnergyIcon({ audioLevel }: EnergyIconProps) {
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       <motion.span
-        className="text-5xl"
+        className={sizeClass}
         animate={{
           scale: audioLevel > 0.6 ? [1, 1.2, 1] : 1,
         }}
