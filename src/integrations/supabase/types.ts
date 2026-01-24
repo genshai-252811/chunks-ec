@@ -14,7 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      metric_settings: {
+        Row: {
+          id: string
+          ideal_threshold: number
+          max_threshold: number
+          method: string | null
+          metric_id: string
+          min_threshold: number
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          id?: string
+          ideal_threshold: number
+          max_threshold: number
+          method?: string | null
+          metric_id: string
+          min_threshold: number
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          id?: string
+          ideal_threshold?: number
+          max_threshold?: number
+          method?: string | null
+          metric_id?: string
+          min_threshold?: number
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
+      sentences: {
+        Row: {
+          category: string
+          created_at: string
+          difficulty: number | null
+          english: string
+          id: string
+          vietnamese: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          difficulty?: number | null
+          english: string
+          id?: string
+          vietnamese: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          difficulty?: number | null
+          english?: string
+          id?: string
+          vietnamese?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
