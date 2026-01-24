@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap } from 'lucide-react';
+import { getDisplayThresholds } from '@/hooks/useDisplaySettings';
 
 interface FloatingEnergyIndicatorProps {
   audioLevel: number;
@@ -7,15 +8,21 @@ interface FloatingEnergyIndicatorProps {
 }
 
 export function FloatingEnergyIndicator({ audioLevel, isActive }: FloatingEnergyIndicatorProps) {
+  const thresholds = getDisplayThresholds();
+  
   // Normalize audio level (0-1)
   const level = Math.min(Math.max(audioLevel, 0), 1);
   
-  // Determine energy state
+  // Determine energy state using configurable thresholds
   const getEnergyState = () => {
-    if (level < 0.2) return { emoji: '😴', label: 'Quiet', color: 'text-blue-400', glowColor: 'rgba(96, 165, 250, 0.6)' };
-    if (level < 0.4) return { emoji: '🙂', label: 'Warming up', color: 'text-cyan-400', glowColor: 'rgba(34, 211, 238, 0.6)' };
-    if (level < 0.6) return { emoji: '😊', label: 'Good!', color: 'text-emerald-400', glowColor: 'rgba(52, 211, 153, 0.7)' };
-    if (level < 0.8) return { emoji: '🔥', label: 'Great!', color: 'text-yellow-400', glowColor: 'rgba(250, 204, 21, 0.8)' };
+    // Create 5 zones based on the 3 thresholds
+    const quietMid = thresholds.quiet * 0.66;
+    const goodMid = thresholds.quiet + (thresholds.good - thresholds.quiet) * 0.5;
+    
+    if (level < quietMid) return { emoji: '😴', label: 'Quiet', color: 'text-blue-400', glowColor: 'rgba(96, 165, 250, 0.6)' };
+    if (level < thresholds.quiet) return { emoji: '🙂', label: 'Warming up', color: 'text-cyan-400', glowColor: 'rgba(34, 211, 238, 0.6)' };
+    if (level < goodMid) return { emoji: '😊', label: 'Good!', color: 'text-emerald-400', glowColor: 'rgba(52, 211, 153, 0.7)' };
+    if (level < thresholds.good) return { emoji: '🔥', label: 'Great!', color: 'text-yellow-400', glowColor: 'rgba(250, 204, 21, 0.8)' };
     return { emoji: '⚡', label: 'POWERFUL!', color: 'text-amber-300', glowColor: 'rgba(252, 211, 77, 0.9)' };
   };
 
