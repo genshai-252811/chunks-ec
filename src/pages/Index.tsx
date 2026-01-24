@@ -163,7 +163,7 @@ const Index = () => {
                 </div>
 
                 {/* Bottom Section - 20% */}
-                <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-2 bg-background/80 backdrop-blur-sm">
+                <div className="flex-1 flex-col gap-3 px-4 bg-background/80 backdrop-blur-sm flex items-center justify-center py-[20px]">
                   {/* Compact Sentence */}
                   <div className="text-center">
                     {sentencesLoading ? <p className="text-lg font-medium text-muted-foreground">Loading...</p> : currentSentence ? <>

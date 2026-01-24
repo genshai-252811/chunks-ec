@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
 export function Header() {
-  return <motion.header className="px-4 py-[20px]" initial={{
+  return <motion.header className="px-[6px] py-[10px]" initial={{
     opacity: 0,
     y: -20
   }} animate={{
