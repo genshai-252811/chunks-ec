@@ -5,12 +5,14 @@ export interface DisplayThresholds {
   quiet: number;
   good: number;
   powerful: number;
+  sensitivity: number;
 }
 
 const DEFAULT_THRESHOLDS: DisplayThresholds = {
   quiet: 0.3,
   good: 0.6,
   powerful: 0.8,
+  sensitivity: 2.5,
 };
 
 const STORAGE_KEY = 'display_settings';
@@ -29,6 +31,7 @@ export function useDisplaySettings() {
           quiet: parsed.quiet_threshold ?? DEFAULT_THRESHOLDS.quiet,
           good: parsed.good_threshold ?? DEFAULT_THRESHOLDS.good,
           powerful: parsed.powerful_threshold ?? DEFAULT_THRESHOLDS.powerful,
+          sensitivity: parsed.sensitivity ?? DEFAULT_THRESHOLDS.sensitivity,
         });
       } catch (e) {
         console.error('Failed to parse display settings from localStorage:', e);
@@ -54,6 +57,7 @@ export function useDisplaySettings() {
             quiet: Number(data.quiet_threshold),
             good: Number(data.good_threshold),
             powerful: Number(data.powerful_threshold),
+            sensitivity: Number(data.sensitivity),
           };
           setThresholds(newThresholds);
           
@@ -62,6 +66,7 @@ export function useDisplaySettings() {
             quiet_threshold: newThresholds.quiet,
             good_threshold: newThresholds.good,
             powerful_threshold: newThresholds.powerful,
+            sensitivity: newThresholds.sensitivity,
           }));
         }
       } catch (e) {
@@ -87,10 +92,25 @@ export function getDisplayThresholds(): DisplayThresholds {
         quiet: parsed.quiet_threshold ?? DEFAULT_THRESHOLDS.quiet,
         good: parsed.good_threshold ?? DEFAULT_THRESHOLDS.good,
         powerful: parsed.powerful_threshold ?? DEFAULT_THRESHOLDS.powerful,
+        sensitivity: parsed.sensitivity ?? DEFAULT_THRESHOLDS.sensitivity,
       };
     } catch (e) {
       console.error('Failed to parse display settings:', e);
     }
   }
   return DEFAULT_THRESHOLDS;
+}
+
+// Get just the sensitivity value for audio recorder
+export function getSensitivity(): number {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      return parsed.sensitivity ?? DEFAULT_THRESHOLDS.sensitivity;
+    } catch (e) {
+      console.error('Failed to parse sensitivity:', e);
+    }
+  }
+  return DEFAULT_THRESHOLDS.sensitivity;
 }

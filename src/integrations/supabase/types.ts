@@ -20,6 +20,7 @@ export type Database = {
           id: string
           powerful_threshold: number
           quiet_threshold: number
+          sensitivity: number
           setting_key: string
           updated_at: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           id?: string
           powerful_threshold?: number
           quiet_threshold?: number
+          sensitivity?: number
           setting_key: string
           updated_at?: string
         }
@@ -36,6 +38,7 @@ export type Database = {
           id?: string
           powerful_threshold?: number
           quiet_threshold?: number
+          sensitivity?: number
           setting_key?: string
           updated_at?: string
         }
