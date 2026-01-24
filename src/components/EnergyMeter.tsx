@@ -1,16 +1,22 @@
 import { motion } from 'framer-motion';
+import { getDisplayThresholds } from '@/hooks/useDisplaySettings';
 
 interface EnergyMeterProps {
   audioLevel: number;
 }
 
 export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
+  const thresholds = getDisplayThresholds();
+  
   // Normalize to 0-100
   const level = Math.min(audioLevel * 100, 100);
   
-  // Get color and label based on level
+  // Get color and label based on configurable thresholds
   const getEnergyState = () => {
-    if (level < 30) {
+    const quietPercent = thresholds.quiet * 100;
+    const goodPercent = thresholds.good * 100;
+    
+    if (level < quietPercent) {
       return { 
         label: '😴 Quiet', 
         color: 'from-primary/50 to-primary',
@@ -18,7 +24,7 @@ export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
         textColor: 'text-primary'
       };
     }
-    if (level < 60) {
+    if (level < goodPercent) {
       return { 
         label: '🔥 Good!', 
         color: 'from-energy-green/70 to-energy-green',

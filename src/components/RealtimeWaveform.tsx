@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { getDisplayThresholds } from '@/hooks/useDisplaySettings';
 
 interface RealtimeWaveformProps {
   isRecording: boolean;
@@ -12,6 +13,7 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
   const audioHistoryRef = useRef<number[]>([]);
   const [currentLevel, setCurrentLevel] = useState(0);
   const maxHistoryLength = 80;
+  const thresholds = getDisplayThresholds();
 
   useEffect(() => {
     if (!isRecording || !canvasRef.current) {
@@ -67,15 +69,15 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
         const barHeight = Math.max(4, level * height * 0.85);
         const barY = centerY - barHeight / 2;
         
-        // Create vertical gradient for each bar
+        // Create vertical gradient for each bar using configurable thresholds
         const gradient = ctx.createLinearGradient(x, barY + barHeight, x, barY);
         
-        if (level < 0.3) {
+        if (level < thresholds.quiet) {
           // Quiet - Cool cyan/blue gradient
           gradient.addColorStop(0, `rgba(30, 80, 120, ${0.3 + level})`);
           gradient.addColorStop(0.5, `rgba(80, 180, 220, ${0.5 + level})`);
           gradient.addColorStop(1, `rgba(120, 220, 255, ${0.7 + level})`);
-        } else if (level < 0.6) {
+        } else if (level < thresholds.good) {
           // Good - Cyan to green gradient
           gradient.addColorStop(0, `rgba(0, 150, 136, ${0.5 + level * 0.3})`);
           gradient.addColorStop(0.5, `rgba(0, 230, 180, ${0.7 + level * 0.3})`);
@@ -88,9 +90,9 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
         }
 
         // Draw glow effect (blur shadow)
-        ctx.shadowColor = level < 0.3 
+        ctx.shadowColor = level < thresholds.quiet 
           ? 'rgba(100, 200, 255, 0.5)' 
-          : level < 0.6 
+          : level < thresholds.good 
             ? 'rgba(0, 255, 180, 0.6)' 
             : 'rgba(0, 255, 255, 0.8)';
         ctx.shadowBlur = level * 15 + 5;
@@ -125,10 +127,10 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
     return null;
   }
 
-  // Get energy label
+  // Get energy label using configurable thresholds
   const getEnergyLabel = () => {
-    if (currentLevel < 0.3) return { text: 'Quiet', color: 'text-primary/70' };
-    if (currentLevel < 0.6) return { text: 'Good', color: 'text-energy-green' };
+    if (currentLevel < thresholds.quiet) return { text: 'Quiet', color: 'text-primary/70' };
+    if (currentLevel < thresholds.good) return { text: 'Good', color: 'text-energy-green' };
     return { text: 'Powerful!', color: 'text-energy-cyan' };
   };
 

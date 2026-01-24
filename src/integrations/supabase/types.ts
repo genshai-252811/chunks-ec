@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      display_settings: {
+        Row: {
+          good_threshold: number
+          id: string
+          powerful_threshold: number
+          quiet_threshold: number
+          setting_key: string
+          updated_at: string
+        }
+        Insert: {
+          good_threshold?: number
+          id?: string
+          powerful_threshold?: number
+          quiet_threshold?: number
+          setting_key: string
+          updated_at?: string
+        }
+        Update: {
+          good_threshold?: number
+          id?: string
+          powerful_threshold?: number
+          quiet_threshold?: number
+          setting_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metric_settings: {
         Row: {
           id: string

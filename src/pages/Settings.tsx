@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, RotateCcw, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Save, RotateCcw, Sliders, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -9,6 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+interface DisplaySettings {
+  quiet_threshold: number;
+  good_threshold: number;
+  powerful_threshold: number;
+}
 
 interface MetricSetting {
   id: string;
@@ -72,16 +78,55 @@ const DEFAULT_SETTINGS: Record<string, { weight: number; min: number; ideal: num
   pauseManagement: { weight: 10, min: 0, ideal: 0, max: 2.71 },
 };
 
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  quiet_threshold: 0.3,
+  good_threshold: 0.6,
+  powerful_threshold: 0.8,
+};
+
 const Settings = () => {
   const [settings, setSettings] = useState<MetricSetting[]>([]);
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedMetrics, setExpandedMetrics] = useState<Set<string>>(new Set());
+  const [isDisplayExpanded, setIsDisplayExpanded] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchDisplaySettings();
   }, []);
+
+  const fetchDisplaySettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('display_settings')
+        .select('*')
+        .eq('setting_key', 'energy_display')
+        .single();
+
+      if (error) {
+        console.error('Failed to fetch display settings:', error);
+        return;
+      }
+
+      if (data) {
+        setDisplaySettings({
+          quiet_threshold: Number(data.quiet_threshold),
+          good_threshold: Number(data.good_threshold),
+          powerful_threshold: Number(data.powerful_threshold),
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching display settings:', err);
+    }
+  };
+
+  const updateDisplaySetting = (field: keyof DisplaySettings, value: number) => {
+    setDisplaySettings(prev => ({ ...prev, [field]: value }));
+    setHasChanges(true);
+  };
 
   const fetchSettings = async () => {
     try {
@@ -134,7 +179,14 @@ const Settings = () => {
         return;
       }
 
-      // Update each setting
+      // Validate display thresholds are in order
+      if (displaySettings.quiet_threshold >= displaySettings.good_threshold ||
+          displaySettings.good_threshold >= displaySettings.powerful_threshold) {
+        toast.error('Display thresholds must be in ascending order: Quiet < Good < Powerful');
+        return;
+      }
+
+      // Update each metric setting
       for (const setting of settings) {
         const { error } = await supabase
           .from('metric_settings')
@@ -150,7 +202,20 @@ const Settings = () => {
         if (error) throw error;
       }
 
-      // Also save to localStorage for the analysis logic
+      // Update display settings
+      const { error: displayError } = await supabase
+        .from('display_settings')
+        .update({
+          quiet_threshold: displaySettings.quiet_threshold,
+          good_threshold: displaySettings.good_threshold,
+          powerful_threshold: displaySettings.powerful_threshold,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('setting_key', 'energy_display');
+
+      if (displayError) throw displayError;
+
+      // Save to localStorage for the analysis logic
       const configForAnalysis = settings.map(s => ({
         id: s.metric_id,
         weight: s.weight,
@@ -162,6 +227,9 @@ const Settings = () => {
         method: s.method || undefined,
       }));
       localStorage.setItem('metricConfig', JSON.stringify(configForAnalysis));
+
+      // Save display settings to localStorage for real-time components
+      localStorage.setItem('display_settings', JSON.stringify(displaySettings));
 
       toast.success('Settings saved successfully!');
       setHasChanges(false);
@@ -186,6 +254,7 @@ const Settings = () => {
         } : s;
       })
     );
+    setDisplaySettings(DEFAULT_DISPLAY_SETTINGS);
     setHasChanges(true);
     toast.info('Settings reset to defaults. Click Save to apply.');
   };
@@ -359,6 +428,125 @@ const Settings = () => {
             );
           })}
         </div>
+
+        {/* Real-time Display Settings */}
+        <motion.div
+          className="mt-8 rounded-xl border border-border bg-card overflow-hidden"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Collapsible open={isDisplayExpanded} onOpenChange={setIsDisplayExpanded}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Eye className="w-5 h-5 text-primary" />
+                  <div className="text-left">
+                    <h3 className="font-medium text-foreground">Real-time Energy Display</h3>
+                    <p className="text-xs text-muted-foreground">Configure visual feedback thresholds during recording</p>
+                  </div>
+                </div>
+                {isDisplayExpanded ? (
+                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="px-4 pb-4 space-y-6 border-t border-border pt-4">
+                {/* Visual Preview */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Preview</Label>
+                  <div className="relative h-8 rounded-full overflow-hidden bg-muted">
+                    {/* Quiet zone */}
+                    <div 
+                      className="absolute inset-y-0 left-0 bg-primary/40"
+                      style={{ width: `${displaySettings.quiet_threshold * 100}%` }}
+                    />
+                    {/* Good zone */}
+                    <div 
+                      className="absolute inset-y-0 bg-energy-green/50"
+                      style={{ 
+                        left: `${displaySettings.quiet_threshold * 100}%`,
+                        width: `${(displaySettings.good_threshold - displaySettings.quiet_threshold) * 100}%` 
+                      }}
+                    />
+                    {/* Powerful zone */}
+                    <div 
+                      className="absolute inset-y-0 bg-energy-cyan/60"
+                      style={{ 
+                        left: `${displaySettings.good_threshold * 100}%`,
+                        width: `${(displaySettings.powerful_threshold - displaySettings.good_threshold) * 100}%` 
+                      }}
+                    />
+                    {/* Max zone */}
+                    <div 
+                      className="absolute inset-y-0 right-0 bg-energy-cyan/80"
+                      style={{ 
+                        left: `${displaySettings.powerful_threshold * 100}%`,
+                      }}
+                    />
+                    {/* Labels */}
+                    <div className="absolute inset-0 flex items-center justify-around text-[10px] font-medium">
+                      <span className="text-primary-foreground/80">😴 Quiet</span>
+                      <span className="text-white/90">🔥 Good</span>
+                      <span className="text-white">⚡ Powerful</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quiet Threshold */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">😴 Quiet Threshold</Label>
+                    <span className="text-sm font-medium text-primary">{Math.round(displaySettings.quiet_threshold * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[displaySettings.quiet_threshold * 100]}
+                    onValueChange={([value]) => updateDisplaySetting('quiet_threshold', value / 100)}
+                    max={100}
+                    min={5}
+                    step={5}
+                  />
+                  <p className="text-xs text-muted-foreground">Below this level shows "Quiet" feedback</p>
+                </div>
+
+                {/* Good Threshold */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">🔥 Good Threshold</Label>
+                    <span className="text-sm font-medium text-energy-green">{Math.round(displaySettings.good_threshold * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[displaySettings.good_threshold * 100]}
+                    onValueChange={([value]) => updateDisplaySetting('good_threshold', value / 100)}
+                    max={100}
+                    min={10}
+                    step={5}
+                  />
+                  <p className="text-xs text-muted-foreground">Above quiet, below this shows "Good" feedback</p>
+                </div>
+
+                {/* Powerful Threshold */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">⚡ Powerful Threshold</Label>
+                    <span className="text-sm font-medium text-energy-cyan">{Math.round(displaySettings.powerful_threshold * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[displaySettings.powerful_threshold * 100]}
+                    onValueChange={([value]) => updateDisplaySetting('powerful_threshold', value / 100)}
+                    max={100}
+                    min={15}
+                    step={5}
+                  />
+                  <p className="text-xs text-muted-foreground">Above this level shows "Powerful" feedback</p>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </motion.div>
 
         {/* Action Buttons */}
         <motion.div
