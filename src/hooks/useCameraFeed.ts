@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface UseCameraFeedReturn {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -11,13 +11,41 @@ interface UseCameraFeedReturn {
 
 /**
  * Hook to manage camera feed stream
+ * Fixed: Uses state-based stream storage to handle React ref timing
  */
 export const useCameraFeed = (): UseCameraFeedReturn => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
+
+  // Attach stream to video element when both are available
+  useEffect(() => {
+    const video = videoRef.current;
+    
+    if (video && stream) {
+      video.srcObject = stream;
+      
+      // Play video once metadata is loaded
+      const handleLoadedMetadata = () => {
+        video.play().catch((err) => {
+          console.warn('Video play failed:', err);
+        });
+      };
+
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      // If already has metadata, play immediately
+      if (video.readyState >= 1) {
+        video.play().catch(console.warn);
+      }
+
+      return () => {
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      };
+    }
+  }, [stream]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -25,29 +53,18 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
       setError(null);
 
       // Request camera with front-facing preference
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user', // Front camera
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           frameRate: { ideal: 30 },
         },
-        audio: false, // We're already handling audio separately
+        audio: false,
       });
 
-      streamRef.current = stream;
-
-      // Attach stream to video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Ensure video plays
-        try {
-          await videoRef.current.play();
-        } catch (playError) {
-          console.warn('Auto-play prevented, will retry:', playError);
-        }
-      }
-
+      // Store stream in state - this triggers the effect to attach it
+      setStream(mediaStream);
       setHasPermission(true);
       setIsLoading(false);
     } catch (err) {
@@ -72,9 +89,9 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
   }, []);
 
   const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
     }
 
     if (videoRef.current) {
@@ -83,7 +100,7 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
 
     setHasPermission(false);
     setError(null);
-  }, []);
+  }, [stream]);
 
   return {
     videoRef,
