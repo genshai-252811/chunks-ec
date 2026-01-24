@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Camera, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
 
 interface CameraFeedProps {
   isRecording?: boolean;
@@ -94,6 +95,12 @@ export function CameraFeed({
           isActive ? "opacity-100" : "opacity-0"
         )}
         style={{ transform: 'scaleX(-1)' }}
+      />
+
+      {/* Floating Energy Indicator above head */}
+      <FloatingEnergyIndicator 
+        audioLevel={audioLevel / 100} 
+        isActive={isRecording && isActive} 
       />
 
       {/* Energy Glow during recording */}
