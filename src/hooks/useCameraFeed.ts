@@ -10,7 +10,7 @@ interface UseCameraFeedReturn {
 }
 
 /**
- * Simple camera feed hook - attaches stream directly to video element
+ * Simple camera feed hook
  */
 export const useCameraFeed = (): UseCameraFeedReturn => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -18,6 +18,18 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsActive(false);
+    setError(null);
+  }, []);
 
   const startCamera = useCallback(async () => {
     // Prevent multiple starts
@@ -38,10 +50,14 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
 
       streamRef.current = mediaStream;
 
-      // Directly attach to video element
+      // Attach to video element
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play();
+        
+        // Wait for video to be ready then play
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(console.warn);
+        };
       }
 
       setIsActive(true);
@@ -51,9 +67,9 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
       
       let msg = 'Could not access camera';
       if (err instanceof Error) {
-        if (err.name === 'NotAllowedError') msg = 'Camera access denied';
+        if (err.name === 'NotAllowedError') msg = 'Camera access denied. Please allow permission.';
         else if (err.name === 'NotFoundError') msg = 'No camera found';
-        else if (err.name === 'NotReadableError') msg = 'Camera in use';
+        else if (err.name === 'NotReadableError') msg = 'Camera in use by another app';
       }
 
       setError(msg);
@@ -62,23 +78,12 @@ export const useCameraFeed = (): UseCameraFeedReturn => {
     }
   }, [isLoading]);
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsActive(false);
-    setError(null);
-  }, []);
-
-  // Cleanup on unmount
+  // Cleanup on unmount only
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
     };
   }, []);

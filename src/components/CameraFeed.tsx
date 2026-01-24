@@ -1,147 +1,171 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Video, VideoOff } from 'lucide-react';
-import { useCameraFeed } from '@/hooks/useCameraFeed';
+import { Camera, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CameraFeedProps {
-  autoStart?: boolean;
   isRecording?: boolean;
   audioLevel?: number;
   className?: string;
+  fullscreen?: boolean;
 }
 
 export function CameraFeed({ 
-  autoStart = true, 
   isRecording = false,
   audioLevel = 0,
-  className 
+  className,
+  fullscreen = false
 }: CameraFeedProps) {
-  const { videoRef, isLoading, error, isActive, startCamera, stopCamera } = useCameraFeed();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isActive, setIsActive] = useState(false);
 
-  // Auto-start camera on mount
+  // Start camera on mount
   useEffect(() => {
-    if (autoStart) {
-      startCamera();
-    }
-    return () => stopCamera();
-  }, [autoStart, startCamera, stopCamera]);
+    let mounted = true;
 
-  // Dynamic glow based on audio level during recording
+    const initCamera = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+
+        if (!mounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        setIsActive(true);
+        setIsLoading(false);
+      } catch (err) {
+        if (!mounted) return;
+        
+        let msg = 'Camera access failed';
+        if (err instanceof Error) {
+          if (err.name === 'NotAllowedError') msg = 'Please allow camera access';
+          else if (err.name === 'NotFoundError') msg = 'No camera found';
+          else if (err.name === 'NotReadableError') msg = 'Camera in use';
+        }
+        setError(msg);
+        setIsLoading(false);
+      }
+    };
+
+    initCamera();
+
+    return () => {
+      mounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
   const glowIntensity = isRecording ? Math.min(audioLevel / 100, 1) : 0;
 
   return (
-    <div className={cn("relative w-full h-full overflow-hidden rounded-2xl", className)}>
-      {/* Video Element - Always rendered */}
+    <div className={cn(
+      "relative overflow-hidden bg-card",
+      fullscreen ? "w-full h-full" : "w-full h-full rounded-2xl",
+      className
+    )}>
+      {/* Video */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
         className={cn(
-          "w-full h-full object-cover transition-opacity duration-300",
+          "absolute inset-0 w-full h-full object-cover transition-opacity duration-500",
           isActive ? "opacity-100" : "opacity-0"
         )}
         style={{ transform: 'scaleX(-1)' }}
       />
 
-      {/* Energy Glow Border during recording */}
-      {isRecording && (
+      {/* Energy Glow during recording */}
+      {isRecording && isActive && (
         <motion.div
-          className="absolute inset-0 rounded-2xl pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            boxShadow: `inset 0 0 ${20 + glowIntensity * 40}px rgba(34, 211, 238, ${0.2 + glowIntensity * 0.4})`,
-            border: `2px solid rgba(34, 211, 238, ${0.3 + glowIntensity * 0.5})`,
+            boxShadow: `inset 0 0 ${30 + glowIntensity * 60}px rgba(34, 211, 238, ${0.15 + glowIntensity * 0.35})`,
           }}
           animate={{
             boxShadow: [
-              `inset 0 0 ${20 + glowIntensity * 40}px rgba(34, 211, 238, ${0.2 + glowIntensity * 0.4})`,
-              `inset 0 0 ${30 + glowIntensity * 50}px rgba(34, 211, 238, ${0.3 + glowIntensity * 0.5})`,
-              `inset 0 0 ${20 + glowIntensity * 40}px rgba(34, 211, 238, ${0.2 + glowIntensity * 0.4})`,
+              `inset 0 0 ${30 + glowIntensity * 60}px rgba(34, 211, 238, ${0.15 + glowIntensity * 0.35})`,
+              `inset 0 0 ${50 + glowIntensity * 80}px rgba(34, 211, 238, ${0.25 + glowIntensity * 0.45})`,
+              `inset 0 0 ${30 + glowIntensity * 60}px rgba(34, 211, 238, ${0.15 + glowIntensity * 0.35})`,
             ],
           }}
-          transition={{ duration: 1, repeat: Infinity }}
+          transition={{ duration: 0.8, repeat: Infinity }}
         />
       )}
 
-      {/* Loading State */}
+      {/* Loading */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-card/90 backdrop-blur-sm">
-          <motion.div
-            className="flex flex-col items-center gap-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
+        <div className="absolute inset-0 flex items-center justify-center bg-card">
+          <motion.div className="flex flex-col items-center gap-3">
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             >
-              <Camera className="w-8 h-8 text-primary" />
+              <Camera className="w-10 h-10 text-primary" />
             </motion.div>
             <p className="text-sm text-muted-foreground">Starting camera...</p>
           </motion.div>
         </div>
       )}
 
-      {/* Error State */}
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-card/95 backdrop-blur-sm">
+      {/* Error */}
+      {error && !isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-card">
           <motion.div
-            className="flex flex-col items-center gap-3 text-center px-4"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-              <VideoOff className="w-6 h-6 text-destructive" />
-            </div>
-            <p className="text-sm text-muted-foreground">{error}</p>
-            <button
-              onClick={startCamera}
-              className="mt-2 px-4 py-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
-            >
-              Try Again
-            </button>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Inactive State (before permission) */}
-      {!isActive && !isLoading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-card/90 backdrop-blur-sm">
-          <motion.div
-            className="flex flex-col items-center gap-3"
+            className="flex flex-col items-center gap-4 text-center px-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <motion.div
-              className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center"
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Video className="w-8 h-8 text-primary" />
-            </motion.div>
-            <p className="text-sm text-muted-foreground">Camera ready</p>
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <VideoOff className="w-8 h-8 text-destructive" />
+            </div>
+            <p className="text-muted-foreground">{error}</p>
           </motion.div>
         </div>
       )}
 
-      {/* Face Guide Overlay (subtle) */}
-      {isActive && !isRecording && (
+      {/* Face Guide (idle only) */}
+      {isActive && !isRecording && !fullscreen && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <motion.div
-            className="w-32 h-40 sm:w-40 sm:h-52 rounded-[50%] border border-dashed border-primary/20"
+            className="w-36 h-48 rounded-[50%] border-2 border-dashed border-primary/25"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
+            transition={{ delay: 0.8 }}
           />
         </div>
       )}
 
-      {/* Corner Decorations */}
-      <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 border-primary/30 rounded-tl-lg" />
-      <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 border-primary/30 rounded-tr-lg" />
-      <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-primary/30 rounded-bl-lg" />
-      <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-primary/30 rounded-br-lg" />
+      {/* Corner Frame (idle only) */}
+      {!fullscreen && (
+        <>
+          <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 border-primary/40 rounded-tl-lg" />
+          <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 border-primary/40 rounded-tr-lg" />
+          <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-primary/40 rounded-bl-lg" />
+          <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-primary/40 rounded-br-lg" />
+        </>
+      )}
     </div>
   );
 }
