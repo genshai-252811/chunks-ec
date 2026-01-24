@@ -57,27 +57,55 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
         return;
       }
 
-      // Draw bars instead of wave for clearer energy visualization
+      // Draw bars with gradient and glow effects
       const barWidth = width / maxHistoryLength;
-      const gap = 1;
+      const gap = 2;
 
       for (let i = 0; i < history.length; i++) {
         const x = i * barWidth;
         const level = history[i];
-        const barHeight = level * height * 0.9;
+        const barHeight = Math.max(4, level * height * 0.85);
+        const barY = centerY - barHeight / 2;
         
-        // Color based on level
-        let color;
+        // Create vertical gradient for each bar
+        const gradient = ctx.createLinearGradient(x, barY + barHeight, x, barY);
+        
         if (level < 0.3) {
-          color = `rgba(100, 200, 255, ${0.4 + level})`; // Cyan - quiet
+          // Quiet - Cool cyan/blue gradient
+          gradient.addColorStop(0, `rgba(30, 80, 120, ${0.3 + level})`);
+          gradient.addColorStop(0.5, `rgba(80, 180, 220, ${0.5 + level})`);
+          gradient.addColorStop(1, `rgba(120, 220, 255, ${0.7 + level})`);
         } else if (level < 0.6) {
-          color = `rgba(50, 255, 150, ${0.5 + level * 0.5})`; // Green - good
+          // Good - Cyan to green gradient
+          gradient.addColorStop(0, `rgba(0, 150, 136, ${0.5 + level * 0.3})`);
+          gradient.addColorStop(0.5, `rgba(0, 230, 180, ${0.7 + level * 0.3})`);
+          gradient.addColorStop(1, `rgba(100, 255, 200, ${0.9})`);
         } else {
-          color = `rgba(0, 255, 255, ${0.7 + level * 0.3})`; // Bright cyan - powerful
+          // Powerful - Bright cyan/white gradient
+          gradient.addColorStop(0, `rgba(0, 180, 200, ${0.7})`);
+          gradient.addColorStop(0.5, `rgba(0, 255, 255, ${0.9})`);
+          gradient.addColorStop(1, `rgba(200, 255, 255, 1)`);
         }
 
-        ctx.fillStyle = color;
-        ctx.fillRect(x + gap/2, centerY - barHeight/2, barWidth - gap, barHeight);
+        // Draw glow effect (blur shadow)
+        ctx.shadowColor = level < 0.3 
+          ? 'rgba(100, 200, 255, 0.5)' 
+          : level < 0.6 
+            ? 'rgba(0, 255, 180, 0.6)' 
+            : 'rgba(0, 255, 255, 0.8)';
+        ctx.shadowBlur = level * 15 + 5;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Draw the bar with rounded corners
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        const radius = Math.min(barWidth / 2 - gap, 3);
+        ctx.roundRect(x + gap / 2, barY, barWidth - gap, barHeight, radius);
+        ctx.fill();
+        
+        // Reset shadow for next iteration
+        ctx.shadowBlur = 0;
       }
 
       animationFrameRef.current = requestAnimationFrame(draw);
