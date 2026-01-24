@@ -5,7 +5,7 @@ export interface Sentence {
   id: string;
   vietnamese: string;
   english: string;
-  category: 'greeting' | 'daily' | 'business' | 'expression' | 'question';
+  category: 'greeting' | 'daily' | 'business' | 'expression' | 'question' | 'vocab' | 'slang';
   difficulty: number;
 }
 
