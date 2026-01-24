@@ -157,64 +157,42 @@ const Index = () => {
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 h-screen flex flex-col">
+        {/* Header - minimal */}
         <Header />
 
-        <main className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+        <main className="flex-1 flex flex-col overflow-hidden">
           <AnimatePresence mode="wait">
             {appState !== 'results' ? (
               <motion.div
                 key="main"
-                className="w-full max-w-2xl flex flex-col items-center gap-6"
+                className="flex-1 flex flex-col"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
               >
-                {/* Camera Preview */}
-                <motion.div
-                  className="w-full aspect-[4/3] max-w-md relative"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
+                {/* Camera - 80% */}
+                <div className="flex-[4] min-h-0 p-2">
                   <CameraFeed 
                     isRecording={false}
                     audioLevel={0}
                     className="w-full h-full"
                   />
-                </motion.div>
+                </div>
 
-                {/* Practice Sentence */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <PracticeSentence
-                    sentence={currentSentence}
-                    onRefresh={handleRefreshSentence}
-                    isRecording={false}
-                  />
-                </motion.div>
+                {/* Bottom Section - 20% */}
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-2 bg-background/80 backdrop-blur-sm">
+                  {/* Compact Sentence */}
+                  <div className="text-center">
+                    <p className="text-lg font-medium text-foreground line-clamp-2">
+                      {currentSentence.vietnamese}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Say it in English
+                    </p>
+                  </div>
 
-                {/* Audio Visualizer */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <AudioVisualizer
-                    isRecording={false}
-                    getAudioLevel={getAudioLevel}
-                  />
-                </motion.div>
-
-                {/* Record Button */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4, type: 'spring' }}
-                >
+                  {/* Record Button */}
                   <RecordButton
                     isRecording={false}
                     isProcessing={appState === 'processing'}
@@ -222,35 +200,17 @@ const Index = () => {
                     onStart={handleStartRecording}
                     onStop={handleStopRecording}
                   />
-                </motion.div>
 
-                {/* Error */}
-                {error && (
-                  <motion.p
-                    className="text-destructive text-sm text-center"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
-                {/* Instructions */}
-                {appState === 'idle' && (
-                  <motion.p
-                    className="text-muted-foreground text-xs text-center max-w-xs"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    Speak the sentence in English with energy!
-                  </motion.p>
-                )}
+                  {/* Error */}
+                  {error && (
+                    <p className="text-destructive text-xs text-center">{error}</p>
+                  )}
+                </div>
               </motion.div>
             ) : (
               <motion.div
                 key="results"
-                className="w-full"
+                className="flex-1 overflow-auto"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -262,12 +222,6 @@ const Index = () => {
             )}
           </AnimatePresence>
         </main>
-
-        <footer className="py-3 text-center">
-          <p className="text-xs text-muted-foreground/40">
-            Voice Energy Measurement App
-          </p>
-        </footer>
       </div>
     </div>
   );
