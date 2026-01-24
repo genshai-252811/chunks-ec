@@ -8,6 +8,7 @@ import { CameraFeed } from '@/components/CameraFeed';
 import { PracticeSentence } from '@/components/PracticeSentence';
 import { RealtimeWaveform } from '@/components/RealtimeWaveform';
 import { EnergyIcon } from '@/components/EnergyIcon';
+import { EnergyMeter } from '@/components/EnergyMeter';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { getRandomSentence, getNextRandomSentence, Sentence } from '@/lib/sentenceBank';
@@ -112,19 +113,18 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Energy Icon - Top Right */}
+        {/* Energy Meter - Top Right */}
         <motion.div
-          className="absolute top-6 right-6 z-50"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
+          className="absolute top-6 right-6 left-6 z-50"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
         >
-          <div className="bg-background/50 backdrop-blur-sm p-3 rounded-full">
-            <EnergyIcon audioLevel={audioLevel} size="lg" />
-          </div>
+          <EnergyMeter audioLevel={audioLevel} />
         </motion.div>
 
         {/* Bottom Controls - Stop Button + Waveform */}
-        <div className="absolute bottom-4 left-4 right-4 z-50 flex flex-col items-center gap-3">
+        <div className="absolute bottom-6 left-4 right-4 z-50 flex flex-col items-center gap-4">
           {/* Stop Button */}
           <RecordButton
             isRecording={isRecording}
@@ -134,8 +134,8 @@ const Index = () => {
             onStop={handleStopRecording}
           />
 
-          {/* Waveform - at very bottom */}
-          <div className="w-full max-w-md">
+          {/* Waveform */}
+          <div className="w-full max-w-sm">
             <RealtimeWaveform
               isRecording={isRecording}
               getAudioLevel={getAudioLevel}
