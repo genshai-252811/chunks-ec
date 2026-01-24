@@ -123,20 +123,9 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Waveform - Bottom */}
-        <div className="absolute bottom-28 left-6 right-6 z-40">
-          <RealtimeWaveform
-            isRecording={isRecording}
-            getAudioLevel={getAudioLevel}
-          />
-        </div>
-
-        {/* Stop Button - Bottom Center */}
-        <motion.div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
+        {/* Bottom Controls - Stop Button + Waveform */}
+        <div className="absolute bottom-4 left-4 right-4 z-50 flex flex-col items-center gap-3">
+          {/* Stop Button */}
           <RecordButton
             isRecording={isRecording}
             isProcessing={appState === 'processing'}
@@ -144,7 +133,15 @@ const Index = () => {
             onStart={handleStartRecording}
             onStop={handleStopRecording}
           />
-        </motion.div>
+
+          {/* Waveform - at very bottom */}
+          <div className="w-full max-w-md">
+            <RealtimeWaveform
+              isRecording={isRecording}
+              getAudioLevel={getAudioLevel}
+            />
+          </div>
+        </div>
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
 interface RealtimeWaveformProps {
@@ -10,7 +10,8 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const audioHistoryRef = useRef<number[]>([]);
-  const maxHistoryLength = 100;
+  const [currentLevel, setCurrentLevel] = useState(0);
+  const maxHistoryLength = 80;
 
   useEffect(() => {
     if (!isRecording || !canvasRef.current) {
@@ -36,9 +37,10 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
     const draw = () => {
       if (!isRecording) return;
 
-      const currentLevel = getAudioLevel();
+      const level = getAudioLevel();
+      setCurrentLevel(level);
 
-      audioHistoryRef.current.push(currentLevel);
+      audioHistoryRef.current.push(level);
       if (audioHistoryRef.current.length > maxHistoryLength) {
         audioHistoryRef.current.shift();
       }
@@ -55,67 +57,28 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
         return;
       }
 
-      // Draw main waveform
-      ctx.beginPath();
-      ctx.lineWidth = 2;
-
-      const step = width / maxHistoryLength;
+      // Draw bars instead of wave for clearer energy visualization
+      const barWidth = width / maxHistoryLength;
+      const gap = 1;
 
       for (let i = 0; i < history.length; i++) {
-        const x = i * step;
+        const x = i * barWidth;
         const level = history[i];
-        const amplitude = level * (height / 2) * 0.8;
-        const y = centerY + Math.sin((i / 5)) * amplitude;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-
-        // Color based on audio level - cyan to green to yellow
-        let r, g, b;
+        const barHeight = level * height * 0.9;
+        
+        // Color based on level
+        let color;
         if (level < 0.3) {
-          // Low - Cyan/Blue
-          r = 50;
-          g = 180 + level * 75;
-          b = 200 + level * 55;
+          color = `rgba(100, 200, 255, ${0.4 + level})`; // Cyan - quiet
         } else if (level < 0.6) {
-          // Medium - Green/Yellow
-          r = 100 + level * 155;
-          g = 200;
-          b = 50;
+          color = `rgba(50, 255, 150, ${0.5 + level * 0.5})`; // Green - good
         } else {
-          // High - Cyan glow
-          r = 0;
-          g = 255;
-          b = 255 - level * 55;
+          color = `rgba(0, 255, 255, ${0.7 + level * 0.3})`; // Bright cyan - powerful
         }
 
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.6 + level * 0.4})`;
+        ctx.fillStyle = color;
+        ctx.fillRect(x + gap/2, centerY - barHeight/2, barWidth - gap, barHeight);
       }
-
-      ctx.stroke();
-
-      // Draw mirror wave (more subtle)
-      ctx.beginPath();
-      ctx.lineWidth = 1.5;
-
-      for (let i = 0; i < history.length; i++) {
-        const x = i * step;
-        const level = history[i];
-        const amplitude = level * (height / 2) * 0.5;
-        const y = centerY - Math.sin((i / 5)) * amplitude;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      }
-
-      ctx.strokeStyle = `rgba(147, 51, 234, 0.3)`; // Purple accent
-      ctx.stroke();
 
       animationFrameRef.current = requestAnimationFrame(draw);
     };
@@ -134,36 +97,42 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
     return null;
   }
 
+  // Get energy label
+  const getEnergyLabel = () => {
+    if (currentLevel < 0.3) return { text: 'Quiet', color: 'text-primary/70' };
+    if (currentLevel < 0.6) return { text: 'Good', color: 'text-energy-green' };
+    return { text: 'Powerful!', color: 'text-energy-cyan' };
+  };
+
+  const energy = getEnergyLabel();
+
   return (
     <motion.div
       className="w-full"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="glass-card p-3 backdrop-blur-md">
+      {/* Energy Level Text */}
+      <motion.div 
+        className="text-center mb-1"
+        key={energy.text}
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+      >
+        <span className={`text-xs font-medium ${energy.color}`}>
+          {energy.text}
+        </span>
+      </motion.div>
+
+      {/* Compact Waveform */}
+      <div className="bg-background/30 backdrop-blur-sm rounded-lg p-1.5">
         <canvas
           ref={canvasRef}
-          className="w-full h-16 rounded"
+          className="w-full h-8 rounded"
           style={{ display: 'block' }}
         />
-
-        {/* Legend */}
-        <div className="flex justify-center items-center gap-4 mt-2 text-[10px] text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-primary/50" />
-            <span>Quiet</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-energy-green/50" />
-            <span>Good</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-energy-cyan" />
-            <span>Powerful</span>
-          </div>
-        </div>
       </div>
     </motion.div>
   );
