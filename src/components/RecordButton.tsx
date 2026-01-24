@@ -99,15 +99,6 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
         )}
       </motion.button>
 
-      {/* Label */}
-      <motion.p
-        className="absolute -bottom-10 text-sm text-muted-foreground font-medium"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        {isProcessing ? "Analyzing..." : isRecording ? "Tap to stop" : "Tap to record"}
-      </motion.p>
     </div>
   );
 }
