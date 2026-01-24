@@ -130,7 +130,7 @@ export function RealtimeWaveform({ isRecording, getAudioLevel }: RealtimeWavefor
       <div className="bg-background/30 backdrop-blur-sm rounded-lg p-1.5">
         <canvas
           ref={canvasRef}
-          className="w-full h-8 rounded"
+          className="w-full h-16 rounded"
           style={{ display: 'block' }}
         />
       </div>
