@@ -27,8 +27,8 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
           <motion.div
             className="absolute rounded-full bg-destructive/20"
             animate={{
-              width: [100, 140 + audioLevel * 40],
-              height: [100, 140 + audioLevel * 40],
+              width: [60, 90 + audioLevel * 30],
+              height: [60, 90 + audioLevel * 30],
               opacity: [0.5, 0.1],
             }}
             transition={{
@@ -40,8 +40,8 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
           <motion.div
             className="absolute rounded-full bg-destructive/30"
             animate={{
-              width: [90, 120 + audioLevel * 30],
-              height: [90, 120 + audioLevel * 30],
+              width: [54, 80 + audioLevel * 20],
+              height: [54, 80 + audioLevel * 20],
               opacity: [0.6, 0.2],
             }}
             transition={{
@@ -57,7 +57,7 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
       {/* Static glow for idle state */}
       {!isRecording && !isProcessing && (
         <motion.div
-          className="absolute w-28 h-28 rounded-full energy-glow"
+          className="absolute w-16 h-16 rounded-full energy-glow"
           animate={{
             opacity: [0.5, 0.8, 0.5],
             scale: [1, 1.02, 1],
@@ -75,7 +75,7 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
         onClick={handleClick}
         disabled={isProcessing}
         className={`
-          relative z-10 w-20 h-20 rounded-full flex items-center justify-center
+          relative z-10 w-14 h-14 rounded-full flex items-center justify-center
           transition-all duration-300 cursor-pointer
           ${
             isRecording
@@ -91,11 +91,11 @@ export function RecordButton({ isRecording, isProcessing, audioLevel, onStart, o
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
         {isProcessing ? (
-          <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+          <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
         ) : isRecording ? (
-          <Square className="w-6 h-6 text-destructive-foreground fill-current" />
+          <Square className="w-4 h-4 text-destructive-foreground fill-current" />
         ) : (
-          <Mic className="w-8 h-8 text-primary-foreground" />
+          <Mic className="w-6 h-6 text-primary-foreground" />
         )}
       </motion.button>
 
