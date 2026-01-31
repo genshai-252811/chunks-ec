@@ -3,20 +3,42 @@ import { getDisplayThresholds } from '@/hooks/useDisplaySettings';
 
 interface EnergyMeterProps {
   audioLevel: number;
+  speechProbability?: number;
+  isSpeaking?: boolean;
 }
 
-export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
+export function EnergyMeter({ audioLevel, speechProbability = 0, isSpeaking = false }: EnergyMeterProps) {
   const thresholds = getDisplayThresholds();
-  
   // Normalize to 0-100
   const level = Math.min(audioLevel * 100, 100);
   
-  // Get color and label based on configurable thresholds
+  // Use speech probability if available (more accurate), otherwise fall back to audio level
+  const effectiveLevel = speechProbability > 0.1 ? speechProbability * 100 : level;
+  
+  // Get color and label based on configurable thresholds and VAD speaking state
   const getEnergyState = () => {
     const quietPercent = thresholds.quiet * 100;
     const goodPercent = thresholds.good * 100;
     
-    if (level < quietPercent) {
+    // If VAD says we're speaking, boost the state
+    if (isSpeaking) {
+      if (effectiveLevel >= goodPercent) {
+        return { 
+          label: '⚡ Powerful!', 
+          color: 'from-energy-cyan/80 to-energy-cyan',
+          bgColor: 'bg-energy-cyan/20',
+          textColor: 'text-energy-cyan'
+        };
+      }
+      return { 
+        label: '🔥 Good!', 
+        color: 'from-energy-green/70 to-energy-green',
+        bgColor: 'bg-energy-green/20',
+        textColor: 'text-energy-green'
+      };
+    }
+    
+    if (effectiveLevel < quietPercent) {
       return { 
         label: '😴 Quiet', 
         color: 'from-primary/50 to-primary',
@@ -24,7 +46,7 @@ export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
         textColor: 'text-primary'
       };
     }
-    if (level < goodPercent) {
+    if (effectiveLevel < goodPercent) {
       return { 
         label: '🔥 Good!', 
         color: 'from-energy-green/70 to-energy-green',
@@ -44,13 +66,25 @@ export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
 
   return (
     <div className="w-full max-w-xs mx-auto">
-      {/* Label */}
+      {/* Label with VAD indicator */}
       <motion.div 
         className="flex justify-between items-center mb-2"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">Energy</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">Energy</span>
+          {isSpeaking && (
+            <motion.span
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-energy-green/20 text-energy-green font-medium"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+            >
+              Speaking
+            </motion.span>
+          )}
+        </div>
         <motion.span 
           className={`text-sm font-semibold ${state.textColor}`}
           key={state.label}
@@ -64,11 +98,11 @@ export function EnergyMeter({ audioLevel }: EnergyMeterProps) {
 
       {/* Progress Bar */}
       <div className={`relative h-4 rounded-full overflow-hidden ${state.bgColor} backdrop-blur-sm`}>
-        {/* Fill */}
+        {/* Fill - use effectiveLevel for more accurate display */}
         <motion.div
           className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${state.color}`}
           initial={{ width: 0 }}
-          animate={{ width: `${level}%` }}
+          animate={{ width: `${Math.max(level, effectiveLevel)}%` }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         />
         

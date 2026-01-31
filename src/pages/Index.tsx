@@ -8,20 +8,25 @@ import { ResultsView } from '@/components/ResultsView';
 import { CameraFeed } from '@/components/CameraFeed';
 import { FlowingWaveform } from '@/components/FlowingWaveform';
 import { EnergyMeter } from '@/components/EnergyMeter';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { Button } from '@/components/ui/button';
+
 type AppState = 'idle' | 'recording' | 'processing' | 'results';
+
 const Index = () => {
   const [appState, setAppState] = useState<AppState>('idle');
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [speechProbability, setSpeechProbability] = useState(0);
+  
   const {
     currentSentence,
     getNextSentence,
     isLoading: sentencesLoading
   } = useSentences();
+  
   const {
     isRecording,
     recordingTime,
@@ -29,20 +34,23 @@ const Index = () => {
     audioBase64,
     sampleRate,
     error,
+    vadMetrics,
     startRecording,
     stopRecording,
     resetRecording,
-    getAudioLevel
-  } = useAudioRecorder();
+    getAudioLevel,
+    getSpeechProbability
+  } = useEnhancedAudioRecorder();
 
-  // Update audio level for visualization
+  // Update audio level and speech probability for visualization
   useEffect(() => {
     if (!isRecording) return;
     const interval = setInterval(() => {
       setAudioLevel(getAudioLevel());
+      setSpeechProbability(getSpeechProbability());
     }, 50);
     return () => clearInterval(interval);
-  }, [isRecording, getAudioLevel]);
+  }, [isRecording, getAudioLevel, getSpeechProbability]);
 
   // Process audio when recording stops
   useEffect(() => {
@@ -104,7 +112,7 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Energy Meter - Top Right */}
+        {/* Energy Meter with VAD - Top Right */}
         <motion.div className="absolute top-6 right-6 left-6 z-50" initial={{
         opacity: 0,
         y: -20
@@ -114,7 +122,7 @@ const Index = () => {
       }} transition={{
         delay: 0.2
       }}>
-          <EnergyMeter audioLevel={audioLevel} />
+          <EnergyMeter audioLevel={audioLevel} speechProbability={speechProbability} isSpeaking={vadMetrics?.isSpeaking} />
         </motion.div>
 
         {/* Bottom Controls - Stop Button + Waveform */}
