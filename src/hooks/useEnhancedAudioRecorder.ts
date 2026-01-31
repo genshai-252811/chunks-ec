@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { MicVAD } from '@ricky0123/vad-web';
 import { getSensitivity } from './useDisplaySettings';
 
 export interface SpeechSegment {
@@ -16,38 +17,49 @@ export interface VADMetrics {
   speechProbability: number;
 }
 
-interface AudioRecorderState {
+interface EnhancedAudioRecorderState {
   isRecording: boolean;
-  isPaused: boolean;
   recordingTime: number;
   audioBlob: Blob | null;
   audioBuffer: Float32Array | null;
   audioBase64: string | null;
   sampleRate: number;
   error: string | null;
-  vadMetrics: VADMetrics | null;
+  vadMetrics: VADMetrics;
+  isVADReady: boolean;
 }
 
-interface UseAudioRecorderReturn extends AudioRecorderState {
+interface UseEnhancedAudioRecorderReturn extends EnhancedAudioRecorderState {
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<void>;
   resetRecording: () => void;
   getAudioLevel: () => number;
+  getSpeechProbability: () => number;
 }
 
-export function useAudioRecorder(): UseAudioRecorderReturn {
-  const [state, setState] = useState<AudioRecorderState>({
+const initialVADMetrics: VADMetrics = {
+  speechSegments: [],
+  totalSpeechTime: 0,
+  totalSilenceTime: 0,
+  speechRatio: 0,
+  isSpeaking: false,
+  speechProbability: 0,
+};
+
+export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
+  const [state, setState] = useState<EnhancedAudioRecorderState>({
     isRecording: false,
-    isPaused: false,
     recordingTime: 0,
     audioBlob: null,
     audioBuffer: null,
     audioBase64: null,
     sampleRate: 44100,
     error: null,
-    vadMetrics: null,
+    vadMetrics: initialVADMetrics,
+    isVADReady: false,
   });
 
+  // Audio recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyzerRef = useRef<AnalyserNode | null>(null);
@@ -55,34 +67,113 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioLevelRef = useRef<number>(0);
+  
+  // VAD refs
+  const vadRef = useRef<MicVAD | null>(null);
+  const speechStartTimeRef = useRef<number>(0);
+  const sessionStartTimeRef = useRef<number>(0);
+  const lastSpeechEndRef = useRef<number>(0);
+  const speechProbabilityRef = useRef<number>(0);
+  const speechSegmentsRef = useRef<SpeechSegment[]>([]);
+  const totalSpeechTimeRef = useRef<number>(0);
+  const totalSilenceTimeRef = useRef<number>(0);
 
   const updateAudioLevel = useCallback(() => {
     if (analyzerRef.current) {
-      // Use time domain data for more responsive amplitude detection
       const dataArray = new Uint8Array(analyzerRef.current.fftSize);
       analyzerRef.current.getByteTimeDomainData(dataArray);
       
-      // Calculate RMS (root mean square) for better volume detection
       let sumSquares = 0;
       for (let i = 0; i < dataArray.length; i++) {
-        const normalized = (dataArray[i] - 128) / 128; // Center around 0
+        const normalized = (dataArray[i] - 128) / 128;
         sumSquares += normalized * normalized;
       }
       const rms = Math.sqrt(sumSquares / dataArray.length);
       
-      // Get sensitivity from settings (default 2.5)
       const sensitivity = getSensitivity();
-      
-      // Apply sensitivity multiplier and cap at 1.0
       const boostedLevel = Math.min(rms * sensitivity, 1.0);
       
-      // Smooth the transition slightly to avoid jitter
       audioLevelRef.current = audioLevelRef.current * 0.3 + boostedLevel * 0.7;
     }
   }, []);
 
   const startRecording = useCallback(async () => {
     try {
+      // Reset VAD metrics
+      speechSegmentsRef.current = [];
+      totalSpeechTimeRef.current = 0;
+      totalSilenceTimeRef.current = 0;
+      sessionStartTimeRef.current = Date.now();
+      lastSpeechEndRef.current = 0;
+
+      // Initialize VAD
+      console.log('Initializing Silero VAD...');
+      const vad = await MicVAD.new({
+        onnxWASMBasePath: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+        baseAssetPath: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
+        
+        onSpeechStart: () => {
+          console.log('VAD: Speech started');
+          speechStartTimeRef.current = Date.now();
+          setState(prev => ({
+            ...prev,
+            vadMetrics: { ...prev.vadMetrics, isSpeaking: true },
+          }));
+        },
+
+        onSpeechEnd: (audio: Float32Array) => {
+          console.log('VAD: Speech ended');
+          const endTime = Date.now();
+          const startTime = speechStartTimeRef.current;
+          const duration = endTime - startTime;
+          
+          // Calculate silence since last speech
+          if (lastSpeechEndRef.current > 0) {
+            const silenceDuration = startTime - lastSpeechEndRef.current;
+            totalSilenceTimeRef.current += silenceDuration;
+          }
+          lastSpeechEndRef.current = endTime;
+
+          const segment: SpeechSegment = {
+            start: startTime - sessionStartTimeRef.current,
+            end: endTime - sessionStartTimeRef.current,
+            duration,
+          };
+
+          speechSegmentsRef.current.push(segment);
+          totalSpeechTimeRef.current += duration;
+
+          const total = totalSpeechTimeRef.current + totalSilenceTimeRef.current;
+          const speechRatio = total > 0 ? totalSpeechTimeRef.current / total : 0;
+
+          setState(prev => ({
+            ...prev,
+            vadMetrics: {
+              ...prev.vadMetrics,
+              isSpeaking: false,
+              speechSegments: [...speechSegmentsRef.current],
+              totalSpeechTime: totalSpeechTimeRef.current,
+              totalSilenceTime: totalSilenceTimeRef.current,
+              speechRatio,
+            },
+          }));
+        },
+
+        onFrameProcessed: (probs: { isSpeech: number; notSpeech: number }) => {
+          speechProbabilityRef.current = probs.isSpeech;
+          setState(prev => ({
+            ...prev,
+            vadMetrics: { ...prev.vadMetrics, speechProbability: probs.isSpeech },
+          }));
+        },
+      });
+
+      vadRef.current = vad;
+      vad.start();
+      console.log('VAD started successfully');
+      setState(prev => ({ ...prev, isVADReady: true }));
+
+      // Get microphone stream for audio recording
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -94,12 +185,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
       streamRef.current = stream;
 
-      // Create audio context for analysis
+      // Create audio context for level analysis
       audioContextRef.current = new AudioContext({ sampleRate: 44100 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyzerRef.current = audioContextRef.current.createAnalyser();
-      analyzerRef.current.fftSize = 512; // Larger FFT for smoother detection
-      analyzerRef.current.smoothingTimeConstant = 0.3; // Faster response
+      analyzerRef.current.fftSize = 512;
+      analyzerRef.current.smoothingTimeConstant = 0.3;
       source.connect(analyzerRef.current);
 
       // Start updating audio level
@@ -148,6 +239,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const stopRecording = useCallback(async () => {
     return new Promise<void>((resolve) => {
+      // Stop VAD
+      if (vadRef.current) {
+        vadRef.current.pause();
+        vadRef.current.destroy();
+        vadRef.current = null;
+      }
+
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -156,8 +254,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.onstop = async () => {
           const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-
-          // Convert to audio buffer for analysis
           const arrayBuffer = await audioBlob.arrayBuffer();
 
           if (audioContextRef.current) {
@@ -165,20 +261,31 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
               const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
               const channelData = audioBuffer.getChannelData(0);
 
-              // Convert to base64 for potential API usage
               const reader = new FileReader();
               reader.readAsDataURL(audioBlob);
               reader.onloadend = () => {
                 const base64 = reader.result as string;
                 const base64Data = base64.split(',')[1];
 
+                // Calculate final speech ratio
+                const total = totalSpeechTimeRef.current + totalSilenceTimeRef.current;
+                const speechRatio = total > 0 ? totalSpeechTimeRef.current / total : 0;
+
                 setState((prev) => ({
                   ...prev,
                   isRecording: false,
+                  isVADReady: false,
                   audioBlob,
                   audioBuffer: channelData,
                   audioBase64: base64Data,
                   sampleRate: audioBuffer.sampleRate,
+                  vadMetrics: {
+                    ...prev.vadMetrics,
+                    speechSegments: [...speechSegmentsRef.current],
+                    totalSpeechTime: totalSpeechTimeRef.current,
+                    totalSilenceTime: totalSilenceTimeRef.current,
+                    speechRatio,
+                  },
                 }));
 
                 resolve();
@@ -188,6 +295,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
               setState((prev) => ({
                 ...prev,
                 isRecording: false,
+                isVADReady: false,
                 error: 'Failed to process audio',
               }));
               resolve();
@@ -198,7 +306,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         mediaRecorderRef.current.stop();
       }
 
-      // Stop all tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
@@ -208,22 +315,30 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const resetRecording = useCallback(() => {
     chunksRef.current = [];
     audioLevelRef.current = 0;
+    speechSegmentsRef.current = [];
+    totalSpeechTimeRef.current = 0;
+    totalSilenceTimeRef.current = 0;
+    speechProbabilityRef.current = 0;
 
     setState({
       isRecording: false,
-      isPaused: false,
       recordingTime: 0,
       audioBlob: null,
       audioBuffer: null,
       audioBase64: null,
       sampleRate: 44100,
       error: null,
-      vadMetrics: null,
+      vadMetrics: initialVADMetrics,
+      isVADReady: false,
     });
   }, []);
 
   const getAudioLevel = useCallback(() => {
     return audioLevelRef.current;
+  }, []);
+
+  const getSpeechProbability = useCallback(() => {
+    return speechProbabilityRef.current;
   }, []);
 
   // Cleanup on unmount
@@ -238,6 +353,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
+      if (vadRef.current) {
+        vadRef.current.pause();
+        vadRef.current.destroy();
+      }
     };
   }, []);
 
@@ -247,5 +366,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     stopRecording,
     resetRecording,
     getAudioLevel,
+    getSpeechProbability,
   };
 }
