@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves } from "lucide-react";
+import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreDisplay } from "./ScoreDisplay";
 import { MetricCard } from "./MetricCard";
@@ -103,6 +103,29 @@ export function ResultsView({ results, onRetry }: ResultsViewProps) {
             transition={{ duration: 0.3 }}
             className="space-y-3 mb-8 overflow-hidden"
           >
+            {results.normalization && (
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Sliders className="h-4 w-4" />
+                  Calibration / LUFS normalization
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div className="text-muted-foreground">
+                    Original: <span className="text-foreground">{results.normalization.originalLUFS} LUFS</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    Final: <span className="text-foreground">{results.normalization.finalLUFS} LUFS</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    Device gain: <span className="text-foreground">{results.normalization.deviceGain}x</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    Normalization: <span className="text-foreground">{results.normalization.normalizationGain}x</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {metrics.map((metric, index) => (
               <MetricCard
                 key={metric.tag}
