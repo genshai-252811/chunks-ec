@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -144,10 +144,12 @@ export function CalibrationWizard() {
     }
   }, [audioBuffer, sampleRate, step, deviceId, deviceLabel, noiseFloor, resetRecording, toast, isProcessing]);
 
-  // Auto-process when audio is available
-  if (audioBuffer && !isRecording && !isProcessing) {
-    processAudio();
-  }
+  // Auto-process when audio is available - use useEffect to avoid render-time side effects
+  useEffect(() => {
+    if (audioBuffer && !isRecording && !isProcessing && step !== 'idle' && step !== 'complete') {
+      processAudio();
+    }
+  }, [audioBuffer, isRecording, isProcessing, step, processAudio]);
 
   const handleDeleteProfile = (profileDeviceId: string) => {
     deleteCalibrationProfile(profileDeviceId);

@@ -343,6 +343,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
       error: null,
       vadMetrics: initialVADMetrics,
       isVADReady: false,
+      deviceId: null,
+      deviceLabel: null,
     });
   }, []);
 
