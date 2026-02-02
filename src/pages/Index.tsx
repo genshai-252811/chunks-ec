@@ -3,11 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { RecordButton } from '@/components/RecordButton';
 import { ResultsView } from '@/components/ResultsView';
 import { RecalibrationAlert } from '@/components/RecalibrationAlert';
 import { CameraFeed } from '@/components/CameraFeed';
-import { FlowingWaveform } from '@/components/FlowingWaveform';
 
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
@@ -55,6 +53,7 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [isRecording, getAudioLevel, getSpeechProbability]);
 
+
   // Process audio when recording stops
   useEffect(() => {
     const processAudio = async () => {
@@ -95,16 +94,44 @@ const Index = () => {
     getNextSentence();
   }, [getNextSentence]);
 
-  // Recording overlay controls (camera is separate - always mounted)
+  // Keyboard shortcut: Spacebar to start/stop recording
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger on spacebar, ignore if typing in an input
+      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault();
+        if (appState === 'idle') {
+          handleStartRecording();
+        } else if (isRecording) {
+          handleStopRecording();
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [appState, isRecording, handleStartRecording, handleStopRecording]);
+
+  // Toggle recording on tap/click anywhere on camera feed
+  const handleCameraTap = useCallback(() => {
+    if (appState === 'processing') return;
+    if (isRecording) {
+      handleStopRecording();
+    } else if (appState === 'idle') {
+      handleStartRecording();
+    }
+  }, [appState, isRecording, handleStartRecording, handleStopRecording]);
+
   const recordingOverlay = isRecording && (
     <motion.div 
-      className="fixed inset-0 z-50 pointer-events-none"
+      className="fixed inset-0 z-50 cursor-pointer"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={handleCameraTap}
     >
       {/* Minimal Timer - Top Center */}
-      <motion.div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto" initial={{
+      <motion.div className="absolute top-6 left-1/2 -translate-x-1/2" initial={{
         opacity: 0,
         y: -20
       }} animate={{
@@ -125,16 +152,17 @@ const Index = () => {
         </div>
       </motion.div>
 
-      {/* Bottom Controls - Stop Button + Waveform */}
-      <div className="absolute bottom-6 left-4 right-4 flex flex-col items-center gap-4 pointer-events-auto">
-        {/* Stop Button */}
-        <RecordButton isRecording={isRecording} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
-
-        {/* Flowing Waveform */}
-        <div className="w-full max-w-sm">
-          <FlowingWaveform isRecording={isRecording} getAudioLevel={getAudioLevel} />
-        </div>
-      </div>
+      {/* Tap hint - bottom center */}
+      <motion.div 
+        className="absolute bottom-8 left-1/2 -translate-x-1/2"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 0.6, y: 0 }}
+        transition={{ delay: 1 }}
+      >
+        <span className="text-xs text-foreground/60 bg-background/30 backdrop-blur-sm px-3 py-1.5 rounded-full">
+          Tap or press Space to stop
+        </span>
+      </motion.div>
     </motion.div>
   );
   return <div className="min-h-screen bg-background text-foreground overflow-hidden">
@@ -165,13 +193,27 @@ const Index = () => {
             opacity: 0,
             scale: 0.95
           }}>
-                {/* Camera - expands to fullscreen when recording */}
+                {/* Camera - expands to fullscreen when recording, tappable to start/stop */}
                 <motion.div 
-                  className={isRecording ? "fixed inset-0 z-40" : "flex-[4] min-h-0 p-2"}
+                  className={isRecording ? "fixed inset-0 z-40" : "flex-[4] min-h-0 p-2 cursor-pointer"}
                   layout
                   transition={{ duration: 0.3, ease: "easeInOut" }}
+                  onClick={!isRecording ? handleCameraTap : undefined}
                 >
                   <CameraFeed isRecording={isRecording} audioLevel={audioLevel} fullscreen={isRecording} className="w-full h-full" />
+                  {/* Tap hint when idle */}
+                  {!isRecording && appState === 'idle' && (
+                    <motion.div 
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <span className="text-sm text-foreground/50 bg-background/40 backdrop-blur-sm px-4 py-2 rounded-full">
+                        Tap or press Space to record
+                      </span>
+                    </motion.div>
+                  )}
                 </motion.div>
 
                 {/* Bottom Section - 20% */}
@@ -188,8 +230,8 @@ const Index = () => {
                       </> : <p className="text-muted-foreground">No sentences available</p>}
                   </div>
 
-                  {/* Record Button with Navigation */}
-                  <div className="flex items-center gap-4">
+                  {/* Sentence Navigation */}
+                  <div className="flex items-center gap-6">
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -199,7 +241,7 @@ const Index = () => {
                       <ChevronLeft className="w-5 h-5" />
                     </Button>
                     
-                    <RecordButton isRecording={false} isProcessing={appState === 'processing'} audioLevel={audioLevel} onStart={handleStartRecording} onStop={handleStopRecording} />
+                    <span className="text-xs text-muted-foreground">Change sentence</span>
                     
                     <Button 
                       variant="ghost" 
