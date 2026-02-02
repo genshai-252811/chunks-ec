@@ -3,8 +3,24 @@
 
 import { calibrateAndNormalize, calculateNoiseFloor } from './lufsNormalization';
 
+// VAD Metrics interface (from useEnhancedAudioRecorder)
+export interface SpeechSegment {
+  start: number;  // ms from recording start
+  end: number;
+  duration: number;
+}
+
+export interface VADMetrics {
+  speechSegments: SpeechSegment[];
+  totalSpeechTime: number;      // ms of actual speech
+  totalSilenceTime: number;     // ms of silence
+  speechRatio: number;          // 0-1, speech / total
+  isSpeaking: boolean;
+  speechProbability: number;
+}
+
 // Types for speech rate method
-export type SpeechRateMethod = "energy-peaks" | "deepgram-stt" | "zero-crossing-rate";
+export type SpeechRateMethod = "energy-peaks" | "vad-enhanced" | "deepgram-stt" | "zero-crossing-rate";
 
 // Config interface matching admin settings
 export interface MetricConfig {
@@ -168,19 +184,107 @@ function detectSyllablesFromPeaks(audioBuffer: Float32Array, sampleRate: number)
   return peaks;
 }
 
-function analyzeSpeechRate(audioBuffer: Float32Array, sampleRate: number): SpeechRateResult {
+/**
+ * VAD-enhanced syllable detection - only counts peaks within speech segments
+ * More accurate than basic energy peaks because it ignores noise/silence
+ */
+function detectSyllablesWithVAD(
+  audioBuffer: Float32Array,
+  sampleRate: number,
+  vadMetrics: VADMetrics
+): number {
+  if (!vadMetrics.speechSegments || vadMetrics.speechSegments.length === 0) {
+    // Fallback to basic method if no VAD data
+    return detectSyllablesFromPeaks(audioBuffer, sampleRate);
+  }
+
+  const frameSize = Math.floor(sampleRate * 0.02); // 20ms frames
+  const hopSize = Math.floor(frameSize / 2);
+  const frameDurationMs = (hopSize / sampleRate) * 1000;
+
+  // Calculate energies for all frames
+  const energies: { energy: number; timeMs: number }[] = [];
+
+  for (let i = 0; i < audioBuffer.length - frameSize; i += hopSize) {
+    let energy = 0;
+    for (let j = 0; j < frameSize; j++) {
+      energy += audioBuffer[i + j] * audioBuffer[i + j];
+    }
+    energies.push({
+      energy: energy / frameSize,
+      timeMs: (i / sampleRate) * 1000,
+    });
+  }
+
+  // Helper to check if a time falls within any speech segment
+  const isWithinSpeech = (timeMs: number): boolean => {
+    return vadMetrics.speechSegments.some(
+      segment => timeMs >= segment.start && timeMs <= segment.end
+    );
+  };
+
+  // Calculate threshold only from speech segments (more accurate)
+  const speechEnergies = energies.filter(e => isWithinSpeech(e.timeMs));
+  if (speechEnergies.length === 0) {
+    return detectSyllablesFromPeaks(audioBuffer, sampleRate);
+  }
+
+  const maxSpeechEnergy = Math.max(...speechEnergies.map(e => e.energy));
+  const threshold = maxSpeechEnergy * 0.15;
+
+  // Count peaks only within speech segments
+  let peaks = 0;
+  let lastPeakIdx = -10;
+
+  for (let i = 1; i < energies.length - 1; i++) {
+    const frame = energies[i];
+
+    // Skip if not within a speech segment
+    if (!isWithinSpeech(frame.timeMs)) {
+      continue;
+    }
+
+    if (
+      frame.energy > threshold &&
+      frame.energy > energies[i - 1].energy &&
+      frame.energy > energies[i + 1].energy &&
+      i - lastPeakIdx > 3
+    ) {
+      peaks++;
+      lastPeakIdx = i;
+    }
+  }
+
+  console.log(`🎯 VAD-enhanced syllable detection: ${peaks} syllables in ${vadMetrics.speechSegments.length} speech segments`);
+
+  return peaks;
+}
+
+function analyzeSpeechRate(
+  audioBuffer: Float32Array,
+  sampleRate: number,
+  vadMetrics?: VADMetrics
+): SpeechRateResult {
   const config = getMetricConfig("speechRate") || { thresholds: { min: 90, ideal: 150, max: 220 } };
   const { min, ideal, max } = config.thresholds;
-  const method = getSpeechRateMethod();
 
-  const durationSeconds = audioBuffer.length / sampleRate;
+  // Determine method based on VAD availability
+  const useVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
+  const method: SpeechRateMethod = useVAD ? "vad-enhanced" : "energy-peaks";
 
-  // Use energy peaks method for syllable detection
-  const syllables = detectSyllablesFromPeaks(audioBuffer, sampleRate);
+  // Use actual speech duration if VAD available, otherwise total duration
+  const durationSeconds = useVAD
+    ? vadMetrics.totalSpeechTime / 1000  // Only count actual speech time
+    : audioBuffer.length / sampleRate;
+
+  // Use VAD-enhanced syllable detection if available
+  const syllables = useVAD
+    ? detectSyllablesWithVAD(audioBuffer, sampleRate, vadMetrics)
+    : detectSyllablesFromPeaks(audioBuffer, sampleRate);
 
   // Estimate WPM (assume ~1.5 syllables per word on average)
   const words = syllables / 1.5;
-  const wpm = Math.round((words / durationSeconds) * 60);
+  const wpm = durationSeconds > 0 ? Math.round((words / durationSeconds) * 60) : 0;
 
   // Score calculation
   let score = 0;
@@ -196,6 +300,10 @@ function analyzeSpeechRate(audioBuffer: Float32Array, sampleRate: number): Speec
     score = Math.max(0, 70 * (1 - (wpm - max) / 50));
   }
 
+  if (useVAD) {
+    console.log(`📊 Speech Rate (VAD-enhanced): ${wpm} WPM over ${durationSeconds.toFixed(2)}s of speech`);
+  }
+
   return {
     wordsPerMinute: wpm,
     score: Math.min(100, Math.max(0, Math.round(score))),
@@ -204,19 +312,58 @@ function analyzeSpeechRate(audioBuffer: Float32Array, sampleRate: number): Speec
   };
 }
 
-function analyzeAcceleration(audioBuffer: Float32Array, sampleRate: number): AccelerationResult {
+function analyzeAcceleration(
+  audioBuffer: Float32Array,
+  sampleRate: number,
+  vadMetrics?: VADMetrics
+): AccelerationResult {
   const config = getMetricConfig("acceleration") || { thresholds: { min: 0, ideal: 50, max: 100 } };
 
   const midpoint = Math.floor(audioBuffer.length / 2);
   const segment1 = audioBuffer.slice(0, midpoint);
   const segment2 = audioBuffer.slice(midpoint);
 
+  // Split VAD segments for each half if available
+  let vadSegment1: VADMetrics | undefined;
+  let vadSegment2: VADMetrics | undefined;
+
+  if (vadMetrics && vadMetrics.speechSegments) {
+    const totalDurationMs = (audioBuffer.length / sampleRate) * 1000;
+    const midpointMs = totalDurationMs / 2;
+
+    const segments1 = vadMetrics.speechSegments.filter(s => s.end <= midpointMs);
+    const segments2 = vadMetrics.speechSegments.filter(s => s.start >= midpointMs)
+      .map(s => ({ ...s, start: s.start - midpointMs, end: s.end - midpointMs }));
+
+    if (segments1.length > 0) {
+      const totalSpeech1 = segments1.reduce((sum, s) => sum + s.duration, 0);
+      vadSegment1 = {
+        ...vadMetrics,
+        speechSegments: segments1,
+        totalSpeechTime: totalSpeech1,
+        totalSilenceTime: midpointMs - totalSpeech1,
+        speechRatio: totalSpeech1 / midpointMs,
+      };
+    }
+
+    if (segments2.length > 0) {
+      const totalSpeech2 = segments2.reduce((sum, s) => sum + s.duration, 0);
+      vadSegment2 = {
+        ...vadMetrics,
+        speechSegments: segments2,
+        totalSpeechTime: totalSpeech2,
+        totalSilenceTime: midpointMs - totalSpeech2,
+        speechRatio: totalSpeech2 / midpointMs,
+      };
+    }
+  }
+
   // Analyze each segment
   const vol1 = analyzeVolume(segment1);
   const vol2 = analyzeVolume(segment2);
 
-  const rate1 = analyzeSpeechRate(segment1, sampleRate);
-  const rate2 = analyzeSpeechRate(segment2, sampleRate);
+  const rate1 = analyzeSpeechRate(segment1, sampleRate, vadSegment1);
+  const rate2 = analyzeSpeechRate(segment2, sampleRate, vadSegment2);
 
   // Check if accelerating (volume or rate increasing)
   const volumeIncrease = vol2.averageDb - vol1.averageDb;
@@ -295,32 +442,50 @@ function calculateAdaptiveNoiseFloor(audioBuffer: Float32Array, sampleRate: numb
   return Math.max(0.005, rms * 3); // Minimum 0.005 to avoid false positives
 }
 
-function analyzePauses(audioBuffer: Float32Array, sampleRate: number): PauseResult {
+function analyzePauses(
+  audioBuffer: Float32Array,
+  sampleRate: number,
+  vadMetrics?: VADMetrics
+): PauseResult {
   const config = getMetricConfig("pauseManagement") || { thresholds: { min: 0, ideal: 0, max: 2.71 } };
   const maxRatio = config.thresholds.max;
 
-  const frameSize = Math.floor(sampleRate * 0.05); // 50ms frames
-  const silenceThreshold = 0.01;
+  let pauseRatio: number;
+  let method: string;
 
-  let silentFrames = 0;
-  let totalFrames = 0;
+  // Use VAD speechRatio if available (ML-based, more accurate)
+  if (vadMetrics && typeof vadMetrics.speechRatio === 'number') {
+    // VAD gives speech ratio, we need pause ratio
+    pauseRatio = 1 - vadMetrics.speechRatio;
+    method = 'vad';
+    console.log(`⏸️ Pause Analysis (VAD): speechRatio=${vadMetrics.speechRatio.toFixed(2)}, pauseRatio=${pauseRatio.toFixed(2)}`);
+  } else {
+    // Fallback to frame-based energy detection
+    const frameSize = Math.floor(sampleRate * 0.05); // 50ms frames
+    const silenceThreshold = 0.01;
 
-  for (let i = 0; i < audioBuffer.length - frameSize; i += frameSize) {
-    let frameEnergy = 0;
-    for (let j = 0; j < frameSize; j++) {
-      frameEnergy += Math.abs(audioBuffer[i + j]);
+    let silentFrames = 0;
+    let totalFrames = 0;
+
+    for (let i = 0; i < audioBuffer.length - frameSize; i += frameSize) {
+      let frameEnergy = 0;
+      for (let j = 0; j < frameSize; j++) {
+        frameEnergy += Math.abs(audioBuffer[i + j]);
+      }
+      frameEnergy /= frameSize;
+
+      if (frameEnergy < silenceThreshold) {
+        silentFrames++;
+      }
+      totalFrames++;
     }
-    frameEnergy /= frameSize;
 
-    if (frameEnergy < silenceThreshold) {
-      silentFrames++;
-    }
-    totalFrames++;
+    pauseRatio = silentFrames / Math.max(1, totalFrames);
+    method = 'energy';
   }
 
-  const pauseRatio = silentFrames / Math.max(1, totalFrames);
-
   // Score: less pause is better (up to a point)
+  // Natural speech should have 10-30% pauses for breathing
   let score = 100;
   if (pauseRatio > 0.1) {
     score = Math.max(0, 100 - ((pauseRatio - 0.1) / maxRatio) * 100);
@@ -374,7 +539,8 @@ export async function analyzeAudioAsync(
   audioBuffer: Float32Array,
   sampleRate: number,
   _audioBase64?: string,
-  deviceId?: string
+  deviceId?: string,
+  vadMetrics?: VADMetrics
 ): Promise<AnalysisResult> {
   let processedBuffer = audioBuffer;
   let normalizationInfo = undefined;
@@ -394,12 +560,21 @@ export async function analyzeAudioAsync(
     console.log('🎚️ LUFS Normalization Applied:', normalizationInfo);
   }
 
-  // Perform all analyses on normalized audio
+  // Log VAD metrics if available
+  if (vadMetrics) {
+    console.log('🎤 VAD Metrics:', {
+      speechSegments: vadMetrics.speechSegments?.length || 0,
+      speechRatio: vadMetrics.speechRatio?.toFixed(2),
+      totalSpeechTime: `${vadMetrics.totalSpeechTime}ms`,
+    });
+  }
+
+  // Perform all analyses on normalized audio with VAD enhancement
   const volume = analyzeVolume(processedBuffer);
-  const speechRate = analyzeSpeechRate(processedBuffer, sampleRate);
-  const acceleration = analyzeAcceleration(processedBuffer, sampleRate);
+  const speechRate = analyzeSpeechRate(processedBuffer, sampleRate, vadMetrics);
+  const acceleration = analyzeAcceleration(processedBuffer, sampleRate, vadMetrics);
   const responseTime = analyzeResponseTime(processedBuffer, sampleRate);
-  const pauses = analyzePauses(processedBuffer, sampleRate);
+  const pauses = analyzePauses(processedBuffer, sampleRate, vadMetrics);
 
   const overallScore = calculateOverallScore({
     volume,

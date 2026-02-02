@@ -60,11 +60,13 @@ const Index = () => {
     const processAudio = async () => {
       if (audioBuffer && appState === 'processing') {
         console.log('🎤 Analyzing with device:', deviceId, deviceLabel);
+        console.log('🎤 VAD Metrics available:', vadMetrics?.speechSegments?.length || 0, 'segments');
         const analysisResults = await analyzeAudioAsync(
           audioBuffer,
           sampleRate,
           audioBase64 || undefined,
-          deviceId || undefined
+          deviceId || undefined,
+          vadMetrics || undefined
         );
         setTimeout(() => {
           setResults(analysisResults);
@@ -73,7 +75,7 @@ const Index = () => {
       }
     };
     processAudio();
-  }, [audioBuffer, audioBase64, sampleRate, deviceId, deviceLabel, appState]);
+  }, [audioBuffer, audioBase64, sampleRate, deviceId, deviceLabel, vadMetrics, appState]);
   const handleStartRecording = useCallback(async () => {
     setResults(null);
     await startRecording();
