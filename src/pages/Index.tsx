@@ -123,18 +123,6 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Energy Meter with VAD - Top Right */}
-        <motion.div className="absolute top-6 right-6 left-6 z-50" initial={{
-        opacity: 0,
-        y: -20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.2
-      }}>
-          <EnergyMeter audioLevel={audioLevel} speechProbability={speechProbability} isSpeaking={vadMetrics?.isSpeaking} />
-        </motion.div>
 
         {/* Bottom Controls - Stop Button + Waveform */}
         <div className="absolute bottom-6 left-4 right-4 z-50 flex flex-col items-center gap-4">
