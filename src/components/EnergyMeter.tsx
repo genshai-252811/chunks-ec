@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { Volume, Volume1, Volume2 } from 'lucide-react';
 import { getDisplayThresholds } from '@/hooks/useDisplaySettings';
 
 interface EnergyMeterProps {
@@ -15,7 +16,7 @@ export function EnergyMeter({ audioLevel, speechProbability = 0, isSpeaking = fa
   // Use speech probability if available (more accurate), otherwise fall back to audio level
   const effectiveLevel = speechProbability > 0.1 ? speechProbability * 100 : level;
   
-  // Get color and label based on configurable thresholds and VAD speaking state
+  // Get color, label and icon based on configurable thresholds and VAD speaking state
   const getEnergyState = () => {
     const quietPercent = thresholds.quiet * 100;
     const goodPercent = thresholds.good * 100;
@@ -24,41 +25,46 @@ export function EnergyMeter({ audioLevel, speechProbability = 0, isSpeaking = fa
     if (isSpeaking) {
       if (effectiveLevel >= goodPercent) {
         return { 
-          label: '⚡ Powerful!', 
+          label: 'Powerful!', 
           color: 'from-energy-cyan/80 to-energy-cyan',
           bgColor: 'bg-energy-cyan/20',
-          textColor: 'text-energy-cyan'
+          textColor: 'text-energy-cyan',
+          Icon: Volume2,
         };
       }
       return { 
-        label: '🔥 Good!', 
+        label: 'Good!', 
         color: 'from-energy-green/70 to-energy-green',
         bgColor: 'bg-energy-green/20',
-        textColor: 'text-energy-green'
+        textColor: 'text-energy-green',
+        Icon: Volume1,
       };
     }
     
     if (effectiveLevel < quietPercent) {
       return { 
-        label: '😴 Quiet', 
+        label: 'Quiet', 
         color: 'from-primary/50 to-primary',
         bgColor: 'bg-primary/20',
-        textColor: 'text-primary'
+        textColor: 'text-primary',
+        Icon: Volume,
       };
     }
     if (effectiveLevel < goodPercent) {
       return { 
-        label: '🔥 Good!', 
+        label: 'Good!', 
         color: 'from-energy-green/70 to-energy-green',
         bgColor: 'bg-energy-green/20',
-        textColor: 'text-energy-green'
+        textColor: 'text-energy-green',
+        Icon: Volume1,
       };
     }
     return { 
-      label: '⚡ Powerful!', 
+      label: 'Powerful!', 
       color: 'from-energy-cyan/80 to-energy-cyan',
       bgColor: 'bg-energy-cyan/20',
-      textColor: 'text-energy-cyan'
+      textColor: 'text-energy-cyan',
+      Icon: Volume2,
     };
   };
 
@@ -66,7 +72,7 @@ export function EnergyMeter({ audioLevel, speechProbability = 0, isSpeaking = fa
 
   return (
     <div className="w-full max-w-xs mx-auto">
-      {/* Label with VAD indicator */}
+      {/* Label with icon */}
       <motion.div 
         className="flex justify-between items-center mb-2"
         initial={{ opacity: 0 }}
@@ -85,15 +91,16 @@ export function EnergyMeter({ audioLevel, speechProbability = 0, isSpeaking = fa
             </motion.span>
           )}
         </div>
-        <motion.span 
-          className={`text-sm font-semibold ${state.textColor}`}
+        <motion.div 
+          className={`flex items-center gap-1 ${state.textColor}`}
           key={state.label}
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 500 }}
         >
-          {state.label}
-        </motion.span>
+          <state.Icon className="w-4 h-4" />
+          <span className="text-sm font-semibold">{state.label}</span>
+        </motion.div>
       </motion.div>
 
       {/* Progress Bar */}
