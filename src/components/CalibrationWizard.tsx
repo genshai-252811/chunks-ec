@@ -98,12 +98,16 @@ export function CalibrationWizard() {
         console.log('🔇 Noise floor measured:', noise.toFixed(2), 'dB');
 
         toast({
-          title: 'Noise floor measured',
-          description: `Background noise: ${noise.toFixed(2)} dB`,
+          title: 'Step 1 complete',
+          description: `Noise floor: ${noise.toFixed(2)} dB. Starting Step 2...`,
         });
 
         resetRecording();
-        setStep('idle');
+
+        // Auto-proceed to Step 2 (reference level)
+        setTimeout(() => {
+          handleMeasureReference();
+        }, 600);
       } else if (step === 'reference') {
         // Calculate reference level (LUFS)
         const reference = await measureReferenceLevel(audioBuffer, sampleRate);
@@ -142,7 +146,7 @@ export function CalibrationWizard() {
     } finally {
       setIsProcessing(false);
     }
-  }, [audioBuffer, sampleRate, step, deviceId, deviceLabel, noiseFloor, resetRecording, toast, isProcessing]);
+  }, [audioBuffer, sampleRate, step, deviceId, deviceLabel, noiseFloor, resetRecording, toast, isProcessing, handleMeasureReference]);
 
   // Auto-process when audio is available - use useEffect to avoid render-time side effects
   useEffect(() => {
