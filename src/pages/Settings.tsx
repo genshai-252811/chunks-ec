@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { CalibrationWizard } from '@/components/CalibrationWizard';
 
 interface DisplaySettings {
   quiet_threshold: number;
@@ -315,6 +316,16 @@ const Settings = () => {
               Weights must add up to exactly 100%
             </p>
           )}
+        </motion.div>
+
+        {/* Device Calibration */}
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <CalibrationWizard />
         </motion.div>
 
         {/* Metric Settings */}

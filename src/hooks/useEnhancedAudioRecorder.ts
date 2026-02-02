@@ -27,6 +27,8 @@ interface EnhancedAudioRecorderState {
   error: string | null;
   vadMetrics: VADMetrics;
   isVADReady: boolean;
+  deviceId: string | null;
+  deviceLabel: string | null;
 }
 
 interface UseEnhancedAudioRecorderReturn extends EnhancedAudioRecorderState {
@@ -57,6 +59,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
     error: null,
     vadMetrics: initialVADMetrics,
     isVADReady: false,
+    deviceId: null,
+    deviceLabel: null,
   });
 
   // Audio recording refs
@@ -185,6 +189,13 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
 
       streamRef.current = stream;
 
+      // Capture device information
+      const audioTrack = stream.getAudioTracks()[0];
+      const deviceId = audioTrack.getSettings().deviceId || 'default';
+      const deviceLabel = audioTrack.label || 'Default Microphone';
+
+      console.log('🎤 Audio Device:', { deviceId, deviceLabel });
+
       // Create audio context for level analysis
       audioContextRef.current = new AudioContext({ sampleRate: 44100 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
@@ -222,6 +233,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
         isRecording: true,
         error: null,
         recordingTime: 0,
+        deviceId,
+        deviceLabel,
       }));
 
       // Cleanup function for level interval

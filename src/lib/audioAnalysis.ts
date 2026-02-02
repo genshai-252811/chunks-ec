@@ -1,6 +1,8 @@
 // Audio Analysis Metrics for Voice Energy App
 // NOTE: This file contains the CORE ANALYSIS LOGIC that must NOT be changed
 
+import { calibrateAndNormalize, calculateNoiseFloor } from './lufsNormalization';
+
 // Types for speech rate method
 export type SpeechRateMethod = "energy-peaks" | "deepgram-stt" | "zero-crossing-rate";
 
@@ -89,6 +91,13 @@ export interface AnalysisResult {
   acceleration: AccelerationResult;
   responseTime: ResponseTimeResult;
   pauses: PauseResult;
+  normalization?: {
+    originalLUFS: number;
+    calibratedLUFS: number;
+    finalLUFS: number;
+    deviceGain: number;
+    normalizationGain: number;
+  };
 }
 
 // ============ ANALYSIS FUNCTIONS (DO NOT MODIFY) ============
@@ -234,12 +243,12 @@ function analyzeResponseTime(audioBuffer: Float32Array, sampleRate: number): Res
   const config = getMetricConfig("responseTime") || { thresholds: { min: 2000, ideal: 200, max: 0 } };
   const { min: maxMs, ideal: idealMs } = config.thresholds;
 
-  // Find first significant audio (above noise floor)
-  const noiseFloor = 0.01;
+  // Calculate adaptive noise floor from first 100ms
+  const adaptiveNoiseFloor = calculateAdaptiveNoiseFloor(audioBuffer, sampleRate);
   let firstSoundSample = 0;
 
   for (let i = 0; i < audioBuffer.length; i++) {
-    if (Math.abs(audioBuffer[i]) > noiseFloor) {
+    if (Math.abs(audioBuffer[i]) > adaptiveNoiseFloor) {
       firstSoundSample = i;
       break;
     }
@@ -262,6 +271,28 @@ function analyzeResponseTime(audioBuffer: Float32Array, sampleRate: number): Res
     score: Math.min(100, Math.max(0, Math.round(score))),
     tag: "READINESS",
   };
+}
+
+/**
+ * Calculate adaptive noise floor based on first 100ms of audio
+ */
+function calculateAdaptiveNoiseFloor(audioBuffer: Float32Array, sampleRate: number): number {
+  const frameSamples = Math.floor(sampleRate * 0.1); // 100ms
+  const noiseSegment = audioBuffer.slice(0, Math.min(frameSamples, audioBuffer.length));
+
+  if (noiseSegment.length === 0) {
+    return 0.01; // Fallback to default
+  }
+
+  // Calculate RMS of noise segment
+  let sum = 0;
+  for (let i = 0; i < noiseSegment.length; i++) {
+    sum += noiseSegment[i] * noiseSegment[i];
+  }
+  const rms = Math.sqrt(sum / noiseSegment.length);
+
+  // Set threshold 3x above noise floor (3 standard deviations)
+  return Math.max(0.005, rms * 3); // Minimum 0.005 to avoid false positives
 }
 
 function analyzePauses(audioBuffer: Float32Array, sampleRate: number): PauseResult {
@@ -342,14 +373,33 @@ function getEmotionalFeedback(score: number): "excellent" | "good" | "poor" {
 export async function analyzeAudioAsync(
   audioBuffer: Float32Array,
   sampleRate: number,
-  _audioBase64?: string
+  _audioBase64?: string,
+  deviceId?: string
 ): Promise<AnalysisResult> {
-  // Perform all analyses
-  const volume = analyzeVolume(audioBuffer);
-  const speechRate = analyzeSpeechRate(audioBuffer, sampleRate);
-  const acceleration = analyzeAcceleration(audioBuffer, sampleRate);
-  const responseTime = analyzeResponseTime(audioBuffer, sampleRate);
-  const pauses = analyzePauses(audioBuffer, sampleRate);
+  let processedBuffer = audioBuffer;
+  let normalizationInfo = undefined;
+
+  // Apply LUFS normalization with device calibration if deviceId is provided
+  if (deviceId) {
+    const result = calibrateAndNormalize(audioBuffer, sampleRate, deviceId);
+    processedBuffer = result.normalized;
+    normalizationInfo = {
+      originalLUFS: Math.round(result.originalLUFS * 10) / 10,
+      calibratedLUFS: Math.round(result.calibratedLUFS * 10) / 10,
+      finalLUFS: Math.round(result.finalLUFS * 10) / 10,
+      deviceGain: Math.round(result.deviceGain * 100) / 100,
+      normalizationGain: Math.round(result.normalizationGain * 100) / 100,
+    };
+
+    console.log('🎚️ LUFS Normalization Applied:', normalizationInfo);
+  }
+
+  // Perform all analyses on normalized audio
+  const volume = analyzeVolume(processedBuffer);
+  const speechRate = analyzeSpeechRate(processedBuffer, sampleRate);
+  const acceleration = analyzeAcceleration(processedBuffer, sampleRate);
+  const responseTime = analyzeResponseTime(processedBuffer, sampleRate);
+  const pauses = analyzePauses(processedBuffer, sampleRate);
 
   const overallScore = calculateOverallScore({
     volume,
@@ -367,5 +417,6 @@ export async function analyzeAudioAsync(
     acceleration,
     responseTime,
     pauses,
+    normalization: normalizationInfo,
   };
 }

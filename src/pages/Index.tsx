@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { RecordButton } from '@/components/RecordButton';
 import { ResultsView } from '@/components/ResultsView';
+import { RecalibrationAlert } from '@/components/RecalibrationAlert';
 import { CameraFeed } from '@/components/CameraFeed';
 import { FlowingWaveform } from '@/components/FlowingWaveform';
 import { EnergyMeter } from '@/components/EnergyMeter';
@@ -35,6 +36,8 @@ const Index = () => {
     sampleRate,
     error,
     vadMetrics,
+    deviceId,
+    deviceLabel,
     startRecording,
     stopRecording,
     resetRecording,
@@ -56,7 +59,13 @@ const Index = () => {
   useEffect(() => {
     const processAudio = async () => {
       if (audioBuffer && appState === 'processing') {
-        const analysisResults = await analyzeAudioAsync(audioBuffer, sampleRate, audioBase64 || undefined);
+        console.log('🎤 Analyzing with device:', deviceId, deviceLabel);
+        const analysisResults = await analyzeAudioAsync(
+          audioBuffer,
+          sampleRate,
+          audioBase64 || undefined,
+          deviceId || undefined
+        );
         setTimeout(() => {
           setResults(analysisResults);
           setAppState('results');
@@ -64,7 +73,7 @@ const Index = () => {
       }
     };
     processAudio();
-  }, [audioBuffer, audioBase64, sampleRate, appState]);
+  }, [audioBuffer, audioBase64, sampleRate, deviceId, deviceLabel, appState]);
   const handleStartRecording = useCallback(async () => {
     setResults(null);
     await startRecording();
@@ -219,7 +228,14 @@ const Index = () => {
           }} exit={{
             opacity: 0
           }}>
-                {results && <ResultsView results={results} onRetry={handleRetry} />}
+                {results && (
+                  <>
+                    <ResultsView results={results} onRetry={handleRetry} />
+                    <div className="px-4 pb-4">
+                      <RecalibrationAlert deviceId={deviceId} />
+                    </div>
+                  </>
+                )}
               </motion.div>}
           </AnimatePresence>
         </main>
