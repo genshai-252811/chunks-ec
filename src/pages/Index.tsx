@@ -8,7 +8,7 @@ import { ResultsView } from '@/components/ResultsView';
 import { RecalibrationAlert } from '@/components/RecalibrationAlert';
 import { CameraFeed } from '@/components/CameraFeed';
 import { FlowingWaveform } from '@/components/FlowingWaveform';
-import { EnergyMeter } from '@/components/EnergyMeter';
+
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
