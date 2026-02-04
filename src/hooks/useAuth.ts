@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -15,6 +15,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const initializedRef = useRef(false);
 
   // Fetch user profile
   const fetchProfile = useCallback(async (userId: string) => {
@@ -30,38 +31,52 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Defer profile fetch to avoid deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        
-        setIsLoading(false);
-      }
-    );
+    let cancelled = false;
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    // Subscribe to changes (sign-in/out, token refresh). We intentionally
+    // do NOT mark loading as finished here to avoid a race where the initial
+    // callback fires before getSession() resolves.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      if (nextSession?.user) {
+        // Defer profile fetch to avoid potential auth state change deadlocks
+        setTimeout(() => {
+          fetchProfile(nextSession.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
       }
-      
-      setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Single source of truth for initial auth resolution
+    (async () => {
+      const {
+        data: { session: initialSession },
+      } = await supabase.auth.getSession();
+
+      if (cancelled) return;
+
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
+
+      if (initialSession?.user) {
+        await fetchProfile(initialSession.user.id);
+      } else {
+        setProfile(null);
+      }
+
+      initializedRef.current = true;
+      setIsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [fetchProfile]);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
@@ -117,7 +132,7 @@ export function useAuth() {
     session,
     profile,
     isLoading,
-    isAuthenticated: !!session,
+    isAuthenticated: !!session?.user,
     signUp,
     signIn,
     signOut,
