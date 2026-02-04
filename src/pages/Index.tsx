@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Settings, ChevronLeft, ChevronRight, LogOut, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ResultsView } from '@/components/ResultsView';
 import { RecalibrationAlert } from '@/components/RecalibrationAlert';
@@ -9,8 +9,16 @@ import { CameraFeed } from '@/components/CameraFeed';
 
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
+import { useAuth } from '@/hooks/useAuth';
+import { usePracticeResults } from '@/hooks/usePracticeResults';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type AppState = 'idle' | 'recording' | 'processing' | 'results';
 
@@ -19,6 +27,10 @@ const Index = () => {
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [speechProbability, setSpeechProbability] = useState(0);
+  
+  const navigate = useNavigate();
+  const { user, profile, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
+  const { saveResult } = usePracticeResults();
   
   const {
     currentSentence,
@@ -67,6 +79,12 @@ const Index = () => {
           deviceId || undefined,
           vadMetrics || undefined
         );
+        
+        // Save results to database if authenticated
+        if (isAuthenticated && analysisResults) {
+          await saveResult(analysisResults, currentSentence?.id || null, recordingTime);
+        }
+        
         setTimeout(() => {
           setResults(analysisResults);
           setAppState('results');
@@ -74,7 +92,8 @@ const Index = () => {
       }
     };
     processAudio();
-  }, [audioBuffer, audioBase64, sampleRate, deviceId, deviceLabel, vadMetrics, appState]);
+  }, [audioBuffer, audioBase64, sampleRate, deviceId, deviceLabel, vadMetrics, appState, isAuthenticated, saveResult, currentSentence, recordingTime]);
+
   const handleStartRecording = useCallback(async () => {
     setResults(null);
     await startRecording();
@@ -173,14 +192,48 @@ const Index = () => {
       </div>
 
       <div className="relative z-10 h-screen flex flex-col">
-        {/* Header with Settings */}
+        {/* Header with Settings and User Menu */}
         <div className="flex items-center justify-between px-4 py-0">
           <Header />
-          <Link to="/settings">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Settings className="w-5 h-5" />
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {isAuthenticated ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <User className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    {profile?.display_name || user?.email}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings">
+                      <Settings className="w-4 h-4 mr-2" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => signOut()}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" size="sm">
+                    Sign in
+                  </Button>
+                </Link>
+                <Link to="/settings">
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <Settings className="w-5 h-5" />
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
 
         <main className="flex-1 flex flex-col overflow-hidden">
