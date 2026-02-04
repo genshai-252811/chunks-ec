@@ -6,6 +6,7 @@ import { Header } from '@/components/Header';
 import { ResultsView } from '@/components/ResultsView';
 import { RecalibrationAlert } from '@/components/RecalibrationAlert';
 import { CameraFeed } from '@/components/CameraFeed';
+import { RecordingWaveform } from '@/components/RecordingWaveform';
 
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
@@ -172,6 +173,12 @@ const Index = () => {
           </span>
         </div>
       </motion.div>
+
+      {/* Real-time Soundwave Visualization */}
+      <RecordingWaveform 
+        getAudioLevel={getAudioLevel} 
+        isActive={isRecording} 
+      />
 
       {/* Tap hint - bottom center */}
       <motion.div 
