@@ -505,26 +505,66 @@ function calculateOverallScore(results: {
   responseTime: ResponseTimeResult;
   pauses: PauseResult;
 }): number {
-  const config = getConfig();
-
-  const weights = {
-    volume: config.find((c) => c.id === "volume")?.weight || 40,
-    speechRate: config.find((c) => c.id === "speechRate")?.weight || 40,
-    acceleration: config.find((c) => c.id === "acceleration")?.weight || 5,
-    responseTime: config.find((c) => c.id === "responseTime")?.weight || 5,
-    pauseManagement: config.find((c) => c.id === "pauseManagement")?.weight || 10,
+  // Try to load custom metric settings first
+  let weights = {
+    volume: 0.40,
+    speechRate: 0.40,
+    acceleration: 0.05,
+    responseTime: 0.05,
+    pauses: 0.10,
   };
 
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+  try {
+    // Load from new metric settings if available
+    const metricSettingsStr = localStorage.getItem('audio_metric_settings');
+    if (metricSettingsStr) {
+      const metricSettings = JSON.parse(metricSettingsStr);
+      // Convert to normalized weights (0-1)
+      const enabledTotal = Object.values(metricSettings)
+        .filter((config: any) => config.enabled)
+        .reduce((sum: number, config: any) => sum + config.weight, 0);
+
+      if (enabledTotal > 0) {
+        weights = {
+          volume: metricSettings.volume.enabled ? metricSettings.volume.weight / 100 : 0,
+          speechRate: metricSettings.speechRate.enabled ? metricSettings.speechRate.weight / 100 : 0,
+          acceleration: metricSettings.acceleration.enabled ? metricSettings.acceleration.weight / 100 : 0,
+          responseTime: metricSettings.responseTime.enabled ? metricSettings.responseTime.weight / 100 : 0,
+          pauses: metricSettings.pauses.enabled ? metricSettings.pauses.weight / 100 : 0,
+        };
+      }
+    } else {
+      // Fall back to old metricConfig from database if new settings not available
+      const config = getConfig();
+      const oldWeights = {
+        volume: config.find((c) => c.id === "volume")?.weight || 40,
+        speechRate: config.find((c) => c.id === "speechRate")?.weight || 40,
+        acceleration: config.find((c) => c.id === "acceleration")?.weight || 5,
+        responseTime: config.find((c) => c.id === "responseTime")?.weight || 5,
+        pauseManagement: config.find((c) => c.id === "pauseManagement")?.weight || 10,
+      };
+      const oldTotal = Object.values(oldWeights).reduce((a, b) => a + b, 0);
+
+      weights = {
+        volume: oldWeights.volume / oldTotal,
+        speechRate: oldWeights.speechRate / oldTotal,
+        acceleration: oldWeights.acceleration / oldTotal,
+        responseTime: oldWeights.responseTime / oldTotal,
+        pauses: oldWeights.pauseManagement / oldTotal,
+      };
+    }
+  } catch (error) {
+    console.error('Failed to load metric weights, using defaults:', error);
+  }
 
   const weightedSum =
     results.volume.score * weights.volume +
     results.speechRate.score * weights.speechRate +
     results.acceleration.score * weights.acceleration +
     results.responseTime.score * weights.responseTime +
-    results.pauses.score * weights.pauseManagement;
+    results.pauses.score * weights.pauses;
 
-  return Math.round(weightedSum / totalWeight);
+  return Math.round(weightedSum);
 }
 
 function getEmotionalFeedback(score: number): "excellent" | "good" | "poor" {

@@ -10,6 +10,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CalibrationWizard } from '@/components/CalibrationWizard';
+import { MetricToggleSettings } from '@/components/MetricToggleSettings';
+import { CalibrationTest } from '@/components/CalibrationTest';
 
 interface DisplaySettings {
   quiet_threshold: number;
@@ -326,6 +328,26 @@ const Settings = () => {
           transition={{ delay: 0.1 }}
         >
           <CalibrationWizard />
+        </motion.div>
+
+        {/* Calibration Test & Manual Adjustment */}
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+        >
+          <CalibrationTest />
+        </motion.div>
+
+        {/* Metric Toggle Settings */}
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <MetricToggleSettings />
         </motion.div>
 
         {/* Metric Settings */}

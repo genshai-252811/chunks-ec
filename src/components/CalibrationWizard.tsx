@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
+import { useRealtimeAudio } from '@/hooks/useRealtimeAudio';
+import { AudioLevelMeter } from '@/components/AudioLevelMeter';
 import {
   getCalibrationProfiles,
   deleteCalibrationProfile,
@@ -37,6 +39,9 @@ export function CalibrationWizard() {
   } = useEnhancedAudioRecorder();
 
   const profiles = getCalibrationProfiles();
+
+  // Real-time audio monitoring for visual feedback
+  const { audioLevel, lufs } = useRealtimeAudio(isRecording);
 
   // Start noise measurement
   const handleMeasureNoise = useCallback(async () => {
@@ -298,20 +303,29 @@ export function CalibrationWizard() {
 
           {/* Step: Noise Measurement */}
           {step === 'noise' && (
-            <div className="space-y-4 text-center">
-              <div className="text-6xl font-bold text-muted-foreground animate-pulse">
-                {countdown}
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Step 1: Measuring Background Noise</h3>
-                <p className="text-sm text-muted-foreground">
-                  {countdown > 0 ? 'Stay silent and still...' : 'Recording noise floor...'}
-                </p>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="text-6xl font-bold text-muted-foreground animate-pulse mb-4">
+                  {countdown}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Step 1: Measuring Background Noise</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {countdown > 0 ? 'Stay silent and still...' : 'Recording noise floor...'}
+                  </p>
+                </div>
               </div>
               {isRecording && (
-                <div className="flex justify-center">
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                </div>
+                <>
+                  <div className="flex justify-center">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                  </div>
+                  <AudioLevelMeter
+                    audioLevel={audioLevel}
+                    showWaveform={false}
+                    height={60}
+                  />
+                </>
               )}
             </div>
           )}
@@ -344,10 +358,19 @@ export function CalibrationWizard() {
                   </div>
 
                   {isRecording && (
-                    <div className="flex items-center justify-center gap-2 text-red-600">
-                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                      <span className="font-medium">Recording...</span>
-                    </div>
+                    <>
+                      <div className="flex items-center justify-center gap-2 text-red-600">
+                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="font-medium">Recording...</span>
+                      </div>
+                      <AudioLevelMeter
+                        audioLevel={audioLevel}
+                        lufs={lufs}
+                        targetLUFS={-23}
+                        showWaveform={true}
+                        height={80}
+                      />
+                    </>
                   )}
                 </div>
               )}
