@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Search } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Search, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ImportLessonsDialog } from '@/components/admin/ImportLessonsDialog';
 import {
   Dialog,
   DialogContent,
@@ -33,8 +34,16 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin, useSentenceManagement, Sentence } from '@/hooks/useAdmin';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const CATEGORIES = ['greeting', 'daily', 'business', 'expression', 'question', 'vocab', 'slang'] as const;
+
+interface ParsedSentence {
+  vietnamese: string;
+  english: string;
+  category: string;
+  difficulty: number;
+}
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -48,6 +57,7 @@ const Admin = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingSentence, setEditingSentence] = useState<Sentence | null>(null);
   const [deletingSentence, setDeletingSentence] = useState<Sentence | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   // Form state
   const [formVietnamese, setFormVietnamese] = useState('');
@@ -152,6 +162,34 @@ const Admin = () => {
     setDeletingSentence(null);
   };
 
+  const handleBulkImport = async (sentences: ParsedSentence[]) => {
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    // Insert in batches of 50
+    const batchSize = 50;
+    for (let i = 0; i < sentences.length; i += batchSize) {
+      const batch = sentences.slice(i, i + batchSize);
+      
+      const { error } = await supabase
+        .from('sentences')
+        .insert(batch);
+
+      if (error) {
+        failed += batch.length;
+        errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
+      } else {
+        success += batch.length;
+      }
+    }
+
+    // Refresh the list
+    await fetchSentences();
+
+    return { success, failed, errors };
+  };
+
   // Filter sentences
   const filteredSentences = sentences.filter(s => {
     const matchesSearch = searchQuery === '' ||
@@ -195,12 +233,17 @@ const Admin = () => {
             <h1 className="text-2xl font-bold">Lesson Management</h1>
           </div>
           
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Sentence
-              </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import CSV
+            </Button>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={resetForm}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Sentence
+                </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -256,9 +299,10 @@ const Admin = () => {
                 <Button onClick={handleAddSentence} disabled={isSubmitting} className="w-full">
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add Sentence'}
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </motion.div>
 
         {/* Filters */}
@@ -428,6 +472,13 @@ const Admin = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import Dialog */}
+      <ImportLessonsDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        onImport={handleBulkImport}
+      />
     </div>
   );
 };
