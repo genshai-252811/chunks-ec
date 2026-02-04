@@ -34,7 +34,7 @@ export function FloatingEnergyIndicator({ audioLevel, isActive }: FloatingEnergy
     <AnimatePresence>
       {isActive && (
         <motion.div
-          className="absolute top-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20"
+          className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20"
           initial={{ opacity: 0, y: 20, scale: 0.5 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -20, scale: 0.5 }}

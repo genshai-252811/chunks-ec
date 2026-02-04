@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { Sparkles, TrendingUp, Zap } from 'lucide-react';
+import { useCelebrationSound } from '@/hooks/useCelebrationSound';
 
 interface ScoreDisplayProps {
   score: number;
@@ -41,11 +42,15 @@ const feedbackConfig = {
 export function ScoreDisplay({ score, emotionalFeedback }: ScoreDisplayProps) {
   const [displayScore, setDisplayScore] = useState(0);
   const [hasTriggeredConfetti, setHasTriggeredConfetti] = useState(false);
+  const { playSuccessSound } = useCelebrationSound();
   const config = feedbackConfig[emotionalFeedback];
   const Icon = config.icon;
 
-  const triggerConfetti = useCallback(() => {
+  const triggerCelebration = () => {
     const colors = ['#22d3ee', '#a855f7', '#22c55e', '#facc15', '#3b82f6'];
+
+    // Play sound effect
+    playSuccessSound();
 
     // Left side burst
     confetti({
@@ -76,7 +81,7 @@ export function ScoreDisplay({ score, emotionalFeedback }: ScoreDisplayProps) {
         scalar: 1.3,
       });
     }, 200);
-  }, []);
+  };
 
   useEffect(() => {
     const duration = 1500;
@@ -95,14 +100,14 @@ export function ScoreDisplay({ score, emotionalFeedback }: ScoreDisplayProps) {
         setDisplayScore(score);
 
         if (emotionalFeedback === 'excellent' && !hasTriggeredConfetti) {
-          triggerConfetti();
+          triggerCelebration();
           setHasTriggeredConfetti(true);
         }
       }
     }, duration / steps);
 
     return () => clearInterval(timer);
-  }, [score, emotionalFeedback, hasTriggeredConfetti, triggerConfetti]);
+  }, [score, emotionalFeedback, hasTriggeredConfetti, playSuccessSound]);
 
   // Calculate ring progress (0-100 mapped to stroke-dashoffset)
   const circumference = 2 * Math.PI * 70; // radius = 70
