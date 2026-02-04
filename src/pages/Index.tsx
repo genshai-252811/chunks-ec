@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, ChevronLeft, ChevronRight, LogOut, User, BarChart3, Shield } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 import { usePracticeResults } from '@/hooks/usePracticeResults';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
+import { FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ const Index = () => {
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [speechProbability, setSpeechProbability] = useState(0);
+  const faceMetricsRef = useRef<FaceTrackingMetrics | null>(null);
   
   const navigate = useNavigate();
   const { user, profile, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
@@ -276,7 +278,13 @@ const Index = () => {
                   transition={{ duration: 0.3, ease: "easeInOut" }}
                   onClick={!isRecording ? handleCameraTap : undefined}
                 >
-                  <CameraFeed isRecording={isRecording} audioLevel={audioLevel} fullscreen={isRecording} className="w-full h-full" />
+                  <CameraFeed 
+                    isRecording={isRecording} 
+                    audioLevel={audioLevel} 
+                    fullscreen={isRecording} 
+                    className="w-full h-full"
+                    onFaceMetricsUpdate={(metrics) => { faceMetricsRef.current = metrics; }}
+                  />
                   {/* Tap hint when idle */}
                   {!isRecording && appState === 'idle' && (
                     <motion.div 

@@ -1,27 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Camera, VideoOff } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Camera, VideoOff, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
+import { useFaceTracking, FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 
 interface CameraFeedProps {
   isRecording?: boolean;
   audioLevel?: number;
   className?: string;
   fullscreen?: boolean;
+  onFaceMetricsUpdate?: (metrics: FaceTrackingMetrics) => void;
 }
 
 export function CameraFeed({ 
   isRecording = false,
   audioLevel = 0,
   className,
-  fullscreen = false
+  fullscreen = false,
+  onFaceMetricsUpdate
 }: CameraFeedProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const frameLoopRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
+
+  const { 
+    isTracking, 
+    metrics: faceMetrics, 
+    startTracking, 
+    stopTracking, 
+    processFrame 
+  } = useFaceTracking();
 
   // Start camera on mount
   useEffect(() => {
@@ -76,6 +88,48 @@ export function CameraFeed({
     };
   }, []);
 
+  // Start/stop face tracking when recording state changes
+  useEffect(() => {
+    if (isRecording && isActive) {
+      startTracking();
+    } else if (!isRecording && isTracking) {
+      stopTracking();
+    }
+  }, [isRecording, isActive, isTracking, startTracking, stopTracking]);
+
+  // Process video frames for face tracking
+  useEffect(() => {
+    if (!isTracking || !videoRef.current) return;
+
+    const processLoop = async () => {
+      if (videoRef.current && isTracking) {
+        await processFrame(videoRef.current);
+      }
+      frameLoopRef.current = requestAnimationFrame(processLoop);
+    };
+
+    // Start processing at ~15fps to balance performance
+    const intervalId = setInterval(() => {
+      if (videoRef.current && isTracking) {
+        processFrame(videoRef.current);
+      }
+    }, 66); // ~15fps
+
+    return () => {
+      if (frameLoopRef.current) {
+        cancelAnimationFrame(frameLoopRef.current);
+      }
+      clearInterval(intervalId);
+    };
+  }, [isTracking, processFrame]);
+
+  // Report face metrics to parent
+  useEffect(() => {
+    if (onFaceMetricsUpdate && isTracking) {
+      onFaceMetricsUpdate(faceMetrics);
+    }
+  }, [faceMetrics, isTracking, onFaceMetricsUpdate]);
+
   const glowIntensity = isRecording ? Math.min(audioLevel / 100, 1) : 0;
 
   return (
@@ -102,6 +156,52 @@ export function CameraFeed({
         audioLevel={audioLevel} 
         isActive={isRecording && isActive} 
       />
+
+      {/* Eye Contact Indicator */}
+      <AnimatePresence>
+        {isRecording && isActive && (
+          <motion.div
+            className="absolute top-4 right-4 flex items-center gap-2 bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-10"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            {faceMetrics.isLookingAtCamera ? (
+              <>
+                <Eye className="w-4 h-4 text-green-500" />
+                <span className="text-xs text-green-500 font-medium">Eye Contact</span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-4 h-4 text-amber-500" />
+                <span className="text-xs text-amber-500 font-medium">Look at camera</span>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Face Tracking Stats (during recording) */}
+      <AnimatePresence>
+        {isRecording && isActive && fullscreen && (
+          <motion.div
+            className="absolute bottom-24 left-4 flex flex-col gap-1 bg-background/60 backdrop-blur-sm px-3 py-2 rounded-lg z-10"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+          >
+            <div className="text-xs text-muted-foreground">
+              <span className="text-foreground font-medium">{faceMetrics.eyeContactScore}%</span> eye contact
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <span className="text-foreground font-medium">{faceMetrics.headStillnessScore}%</span> head stillness
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <span className="text-foreground font-medium">{faceMetrics.blinkRate}</span> blinks/min
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Energy Glow during recording */}
       {isRecording && isActive && (

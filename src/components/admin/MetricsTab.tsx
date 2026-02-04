@@ -27,19 +27,28 @@ interface MetricSetting {
 }
 
 const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
-  { metric_id: 'volume', weight: 40, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
-  { metric_id: 'speechRate', weight: 40, min_threshold: 90, ideal_threshold: 150, max_threshold: 220, method: 'energy-peaks', enabled: true },
+  { metric_id: 'volume', weight: 30, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
+  { metric_id: 'speechRate', weight: 30, min_threshold: 90, ideal_threshold: 150, max_threshold: 220, method: 'energy-peaks', enabled: true },
   { metric_id: 'acceleration', weight: 5, min_threshold: 0, ideal_threshold: 50, max_threshold: 100, method: null, enabled: true },
   { metric_id: 'responseTime', weight: 5, min_threshold: 2000, ideal_threshold: 200, max_threshold: 0, method: null, enabled: true },
   { metric_id: 'pauseManagement', weight: 10, min_threshold: 0, ideal_threshold: 0, max_threshold: 2.71, method: null, enabled: true },
+  // Video-based metrics
+  { metric_id: 'eyeContact', weight: 10, min_threshold: 0, ideal_threshold: 80, max_threshold: 100, method: 'percentage', enabled: true },
+  { metric_id: 'headStillness', weight: 5, min_threshold: 0, ideal_threshold: 85, max_threshold: 100, method: 'percentage', enabled: true },
+  { metric_id: 'blinkRate', weight: 5, min_threshold: 10, ideal_threshold: 15, max_threshold: 25, method: 'count_per_minute', enabled: true },
 ];
 
-const METRIC_LABELS: Record<string, { name: string; description: string; unit: string; color: string }> = {
-  volume: { name: 'Energy (Volume)', description: 'Average loudness in dB', unit: 'dB', color: 'bg-blue-500' },
-  speechRate: { name: 'Fluency (Speech Rate)', description: 'Words per minute', unit: 'WPM', color: 'bg-green-500' },
-  acceleration: { name: 'Dynamics (Acceleration)', description: 'Energy increase over time', unit: '%', color: 'bg-purple-500' },
-  responseTime: { name: 'Readiness (Response Time)', description: 'Time before speaking', unit: 'ms', color: 'bg-orange-500' },
-  pauseManagement: { name: 'Fluidity (Pauses)', description: 'Pause ratio', unit: 'ratio', color: 'bg-pink-500' },
+const METRIC_LABELS: Record<string, { name: string; description: string; unit: string; color: string; category: 'audio' | 'video' }> = {
+  // Audio metrics
+  volume: { name: 'Energy (Volume)', description: 'Average loudness in dB', unit: 'dB', color: 'bg-blue-500', category: 'audio' },
+  speechRate: { name: 'Fluency (Speech Rate)', description: 'Words per minute', unit: 'WPM', color: 'bg-green-500', category: 'audio' },
+  acceleration: { name: 'Dynamics (Acceleration)', description: 'Energy increase over time', unit: '%', color: 'bg-purple-500', category: 'audio' },
+  responseTime: { name: 'Readiness (Response Time)', description: 'Time before speaking', unit: 'ms', color: 'bg-orange-500', category: 'audio' },
+  pauseManagement: { name: 'Fluidity (Pauses)', description: 'Pause ratio', unit: 'ratio', color: 'bg-pink-500', category: 'audio' },
+  // Video metrics
+  eyeContact: { name: 'Eye Contact', description: 'Looking at camera percentage', unit: '%', color: 'bg-cyan-500', category: 'video' },
+  headStillness: { name: 'Head Stillness', description: 'Minimal head movement', unit: '%', color: 'bg-amber-500', category: 'video' },
+  blinkRate: { name: 'Blink Rate', description: 'Blinks per minute (natural is 15-20)', unit: 'bpm', color: 'bg-rose-500', category: 'video' },
 };
 
 export const MetricsTab = () => {
@@ -289,82 +298,170 @@ export const MetricsTab = () => {
         </div>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {metrics.map((metric) => {
-          const label = METRIC_LABELS[metric.metric_id] || { name: metric.metric_id, description: '', unit: '', color: 'bg-gray-500' };
+      {/* Audio Metrics */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+          🎤 Audio Metrics
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {metrics.filter(m => METRIC_LABELS[m.metric_id]?.category === 'audio').map((metric) => {
+            const label = METRIC_LABELS[metric.metric_id] || { name: metric.metric_id, description: '', unit: '', color: 'bg-muted', category: 'audio' };
 
-          return (
-            <Card key={metric.metric_id} className={`transition-opacity ${!metric.enabled && 'opacity-50'}`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      id={`toggle-${metric.metric_id}`}
-                      checked={metric.enabled}
-                      onCheckedChange={() => handleToggle(metric.metric_id)}
+            return (
+              <Card key={metric.metric_id} className={`transition-opacity ${!metric.enabled && 'opacity-50'}`}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id={`toggle-${metric.metric_id}`}
+                        checked={metric.enabled}
+                        onCheckedChange={() => handleToggle(metric.metric_id)}
+                      />
+                      <div>
+                        <CardTitle className="text-base">{label.name}</CardTitle>
+                        <CardDescription className="text-xs">{label.description}</CardDescription>
+                      </div>
+                    </div>
+                    <div className={`w-3 h-3 rounded-full ${label.color}`} title="Color indicator" />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Weight */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <Label>Weight</Label>
+                      <span className="text-muted-foreground font-medium">{metric.weight}%</span>
+                    </div>
+                    <Slider
+                      value={[metric.weight]}
+                      onValueChange={([v]) => handleWeightChange(metric.metric_id, v)}
+                      min={0}
+                      max={100}
+                      step={5}
+                      disabled={!metric.enabled}
                     />
-                    <div>
-                      <CardTitle className="text-base">{label.name}</CardTitle>
-                      <CardDescription className="text-xs">{label.description}</CardDescription>
-                    </div>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${label.color}`} title="Color indicator" />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Weight */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <Label>Weight</Label>
-                    <span className="text-muted-foreground font-medium">{metric.weight}%</span>
-                  </div>
-                  <Slider
-                    value={[metric.weight]}
-                    onValueChange={([v]) => handleWeightChange(metric.metric_id, v)}
-                    min={0}
-                    max={100}
-                    step={5}
-                    disabled={!metric.enabled}
-                  />
-                </div>
 
-                {/* Thresholds */}
-                {metric.enabled && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-xs">Min ({label.unit})</Label>
-                      <Input
-                        type="number"
-                        value={metric.min_threshold}
-                        onChange={(e) => handleThresholdChange(metric.metric_id, 'min_threshold', parseFloat(e.target.value) || 0)}
-                        className="h-8"
-                      />
+                  {/* Thresholds */}
+                  {metric.enabled && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">Min ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.min_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'min_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Ideal ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.ideal_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'ideal_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.max_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'max_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs">Ideal ({label.unit})</Label>
-                      <Input
-                        type="number"
-                        value={metric.ideal_threshold}
-                        onChange={(e) => handleThresholdChange(metric.metric_id, 'ideal_threshold', parseFloat(e.target.value) || 0)}
-                        className="h-8"
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Video Metrics */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+          📹 Video Metrics (MediaPipe)
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {metrics.filter(m => METRIC_LABELS[m.metric_id]?.category === 'video').map((metric) => {
+            const label = METRIC_LABELS[metric.metric_id] || { name: metric.metric_id, description: '', unit: '', color: 'bg-muted', category: 'video' };
+
+            return (
+              <Card key={metric.metric_id} className={`transition-opacity ${!metric.enabled && 'opacity-50'}`}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id={`toggle-${metric.metric_id}`}
+                        checked={metric.enabled}
+                        onCheckedChange={() => handleToggle(metric.metric_id)}
                       />
+                      <div>
+                        <CardTitle className="text-base">{label.name}</CardTitle>
+                        <CardDescription className="text-xs">{label.description}</CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs">Max ({label.unit})</Label>
-                      <Input
-                        type="number"
-                        value={metric.max_threshold}
-                        onChange={(e) => handleThresholdChange(metric.metric_id, 'max_threshold', parseFloat(e.target.value) || 0)}
-                        className="h-8"
-                      />
-                    </div>
+                    <div className={`w-3 h-3 rounded-full ${label.color}`} title="Color indicator" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Weight */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <Label>Weight</Label>
+                      <span className="text-muted-foreground font-medium">{metric.weight}%</span>
+                    </div>
+                    <Slider
+                      value={[metric.weight]}
+                      onValueChange={([v]) => handleWeightChange(metric.metric_id, v)}
+                      min={0}
+                      max={100}
+                      step={5}
+                      disabled={!metric.enabled}
+                    />
+                  </div>
+
+                  {/* Thresholds */}
+                  {metric.enabled && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">Min ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.min_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'min_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Ideal ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.ideal_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'ideal_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max ({label.unit})</Label>
+                        <Input
+                          type="number"
+                          value={metric.max_threshold}
+                          onChange={(e) => handleThresholdChange(metric.metric_id, 'max_threshold', parseFloat(e.target.value) || 0)}
+                          className="h-8"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
