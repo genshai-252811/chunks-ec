@@ -77,6 +77,80 @@ export type Database = {
         }
         Relationships: []
       }
+      practice_results: {
+        Row: {
+          clarity_score: number | null
+          created_at: string
+          duration_seconds: number
+          energy_score: number | null
+          id: string
+          pace_score: number | null
+          score: number
+          sentence_id: string | null
+          speech_ratio: number | null
+          user_id: string
+          volume_avg: number | null
+        }
+        Insert: {
+          clarity_score?: number | null
+          created_at?: string
+          duration_seconds: number
+          energy_score?: number | null
+          id?: string
+          pace_score?: number | null
+          score: number
+          sentence_id?: string | null
+          speech_ratio?: number | null
+          user_id: string
+          volume_avg?: number | null
+        }
+        Update: {
+          clarity_score?: number | null
+          created_at?: string
+          duration_seconds?: number
+          energy_score?: number | null
+          id?: string
+          pace_score?: number | null
+          score?: number
+          sentence_id?: string | null
+          speech_ratio?: number | null
+          user_id?: string
+          volume_avg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_results_sentence_id_fkey"
+            columns: ["sentence_id"]
+            isOneToOne: false
+            referencedRelation: "sentences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sentences: {
         Row: {
           category: string
