@@ -518,11 +518,11 @@ function calculateOverallScore(results: {
     // Load from new metric settings if available
     const metricSettingsStr = localStorage.getItem('audio_metric_settings');
     if (metricSettingsStr) {
-      const metricSettings = JSON.parse(metricSettingsStr);
+      const metricSettings = JSON.parse(metricSettingsStr) as Record<string, any>;
       // Convert to normalized weights (0-1)
-      const enabledTotal = Object.values(metricSettings)
-        .filter((config: any) => config.enabled)
-        .reduce((sum: number, config: any) => sum + config.weight, 0);
+      const enabledTotal: number = (Object.values(metricSettings) as any[])
+        .filter((config) => !!config?.enabled)
+        .reduce((sum, config) => sum + (Number(config?.weight) || 0), 0);
 
       if (enabledTotal > 0) {
         weights = {

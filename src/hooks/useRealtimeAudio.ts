@@ -18,7 +18,8 @@ export function useRealtimeAudio(enabled: boolean = false) {
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyzerRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Float32Array | null>(null);
+  // Explicit ArrayBuffer generic fixes TS/lib.dom mismatch with getFloatTimeDomainData
+  const dataArrayRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array>(new Float32Array(0));
   const bufferIndexRef = useRef(0);
@@ -100,7 +101,10 @@ export function useRealtimeAudio(enabled: boolean = false) {
 
       // Create data array
       const bufferLength = analyzer.fftSize;
-      dataArrayRef.current = new Float32Array(bufferLength);
+      // Ensure underlying buffer is a plain ArrayBuffer (not SharedArrayBuffer)
+      dataArrayRef.current = new Float32Array(
+        new ArrayBuffer(bufferLength * Float32Array.BYTES_PER_ELEMENT)
+      );
 
       // Connect stream to analyzer
       const source = audioContext.createMediaStreamSource(stream);

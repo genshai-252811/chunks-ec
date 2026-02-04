@@ -3,12 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export function useAdmin() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
+      // IMPORTANT: don't resolve admin loading until auth has resolved.
+      // Otherwise /admin can redirect to / before the session/user is available.
+      if (authLoading) {
+        setIsLoading(true);
+        return;
+      }
+
       if (!user) {
         setIsAdmin(false);
         setIsLoading(false);
@@ -38,7 +45,7 @@ export function useAdmin() {
     };
 
     checkAdminStatus();
-  }, [user]);
+  }, [user, authLoading]);
 
   return { isAdmin, isLoading };
 }
