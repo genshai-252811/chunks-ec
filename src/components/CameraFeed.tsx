@@ -99,7 +99,7 @@ export function CameraFeed({
 
       {/* Floating Energy Indicator above head */}
       <FloatingEnergyIndicator 
-        audioLevel={audioLevel / 100} 
+        audioLevel={audioLevel} 
         isActive={isRecording && isActive} 
       />
 
