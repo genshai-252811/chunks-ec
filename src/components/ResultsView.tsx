@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight } from "lucide-react";
+import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Move, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreDisplay } from "./ScoreDisplay";
 import { MetricCard } from "./MetricCard";
 import { AnalysisResult } from "@/lib/audioAnalysis";
+import { FaceTrackingMetrics } from "@/hooks/useFaceTracking";
 
 interface ResultsViewProps {
   results: AnalysisResult;
+  faceMetrics?: FaceTrackingMetrics | null;
   onRetry: () => void;
 }
 
-export function ResultsView({ results, onRetry }: ResultsViewProps) {
+export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps) {
   const [showDetails, setShowDetails] = useState(false);
 
-  const metrics = [
+  const audioMetrics = [
     {
       title: "Voice Power",
       titleVi: "Công suất giọng nói",
@@ -64,9 +66,43 @@ export function ResultsView({ results, onRetry }: ResultsViewProps) {
     },
   ];
 
+  // Video metrics from face tracking
+  const videoMetrics = faceMetrics ? [
+    {
+      title: "Eye Contact",
+      titleVi: "Giao tiếp bằng mắt",
+      score: faceMetrics.eyeContactScore,
+      value: `${faceMetrics.eyeContactScore}% of time`,
+      rawValue: faceMetrics.eyeContactScore,
+      tag: "FOCUS",
+      icon: Eye,
+    },
+    {
+      title: "Head Stillness",
+      titleVi: "Đầu ổn định",
+      score: faceMetrics.headStillnessScore,
+      value: `${faceMetrics.headStillnessScore}% stable`,
+      rawValue: faceMetrics.headStillnessScore,
+      tag: "POISE",
+      icon: Move,
+    },
+    {
+      title: "Blink Rate",
+      titleVi: "Tần suất chớp mắt",
+      score: faceMetrics.blinkRate >= 10 && faceMetrics.blinkRate <= 25 ? 80 : 
+             faceMetrics.blinkRate >= 5 && faceMetrics.blinkRate <= 30 ? 60 : 40,
+      value: `${faceMetrics.blinkRate} blinks/min`,
+      rawValue: faceMetrics.blinkRate,
+      tag: "NATURAL",
+      icon: Sparkles,
+    },
+  ] : [];
+
+  const allMetrics = [...audioMetrics, ...videoMetrics];
+
   // Quick summary of top metrics
-  const topMetric = metrics.reduce((a, b) => a.score > b.score ? a : b);
-  const needsWork = metrics.reduce((a, b) => a.score < b.score ? a : b);
+  const topMetric = allMetrics.reduce((a, b) => a.score > b.score ? a : b);
+  const needsWork = allMetrics.reduce((a, b) => a.score < b.score ? a : b);
 
   return (
     <div className="w-full max-w-md mx-auto px-4 pb-8">
@@ -180,13 +216,47 @@ export function ResultsView({ results, onRetry }: ResultsViewProps) {
               </motion.div>
             )}
 
-            {metrics.map((metric, index) => (
+            {/* Audio Metrics Section */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+                <Volume2 className="w-3 h-3" /> Audio Analysis
+              </p>
+            </motion.div>
+            
+            {audioMetrics.map((metric, index) => (
               <MetricCard
                 key={metric.tag}
                 {...metric}
                 index={index}
               />
             ))}
+
+            {/* Video Metrics Section */}
+            {videoMetrics.length > 0 && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="pt-4"
+                >
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <Eye className="w-3 h-3" /> Video Analysis
+                  </p>
+                </motion.div>
+                
+                {videoMetrics.map((metric, index) => (
+                  <MetricCard
+                    key={metric.tag}
+                    {...metric}
+                    index={index + audioMetrics.length}
+                  />
+                ))}
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

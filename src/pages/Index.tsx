@@ -30,6 +30,7 @@ const Index = () => {
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [speechProbability, setSpeechProbability] = useState(0);
+  const [finalFaceMetrics, setFinalFaceMetrics] = useState<FaceTrackingMetrics | null>(null);
   const faceMetricsRef = useRef<FaceTrackingMetrics | null>(null);
   
   const navigate = useNavigate();
@@ -106,11 +107,14 @@ const Index = () => {
   }, [startRecording]);
   const handleStopRecording = useCallback(async () => {
     setAppState('processing');
+    // Capture final face metrics before stopping
+    setFinalFaceMetrics(faceMetricsRef.current);
     await stopRecording();
   }, [stopRecording]);
   const handleRetry = useCallback(() => {
     resetRecording();
     setResults(null);
+    setFinalFaceMetrics(null);
     setAppState('idle');
     getNextSentence();
   }, [resetRecording, getNextSentence]);
@@ -351,7 +355,7 @@ const Index = () => {
           }}>
                 {results && (
                   <>
-                    <ResultsView results={results} onRetry={handleRetry} />
+                    <ResultsView results={results} faceMetrics={finalFaceMetrics} onRetry={handleRetry} />
                     <div className="px-4 pb-4">
                       <RecalibrationAlert deviceId={deviceId} />
                     </div>

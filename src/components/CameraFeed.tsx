@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, VideoOff, Eye, EyeOff } from 'lucide-react';
+import { Camera, VideoOff, Eye, EyeOff, Grid3X3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
 import { FaceTrackingOverlay } from './FaceTrackingOverlay';
 import { useFaceTracking, FaceTrackingMetrics } from '@/hooks/useFaceTracking';
+import { Button } from '@/components/ui/button';
 
 interface CameraFeedProps {
   isRecording?: boolean;
@@ -27,6 +28,7 @@ export function CameraFeed({
   const [error, setError] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 1280, height: 720 });
+  const [showMesh, setShowMesh] = useState(true);
 
   const { 
     isTracking, 
@@ -162,13 +164,43 @@ export function CameraFeed({
       />
 
       {/* Face Tracking Overlay */}
-      <FaceTrackingOverlay
-        face={currentFace}
-        isTracking={isTracking}
-        isModelLoaded={isModelLoaded}
-        videoWidth={videoDimensions.width}
-        videoHeight={videoDimensions.height}
-      />
+      {showMesh && (
+        <FaceTrackingOverlay
+          face={currentFace}
+          isTracking={isTracking}
+          isModelLoaded={isModelLoaded}
+          videoWidth={videoDimensions.width}
+          videoHeight={videoDimensions.height}
+        />
+      )}
+
+      {/* Mesh Toggle Button */}
+      <AnimatePresence>
+        {isActive && (
+          <motion.div
+            className="absolute bottom-4 right-4 z-30"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMesh(!showMesh);
+              }}
+              className={cn(
+                "rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80",
+                showMesh && "text-primary"
+              )}
+              title={showMesh ? "Hide face mesh" : "Show face mesh"}
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Energy Indicator above head */}
       <FloatingEnergyIndicator 
