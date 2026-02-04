@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, ChevronLeft, ChevronRight, LogOut, User } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight, LogOut, User, BarChart3, Shield } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ResultsView } from '@/components/ResultsView';
@@ -10,6 +10,7 @@ import { CameraFeed } from '@/components/CameraFeed';
 import { useEnhancedAudioRecorder } from '@/hooks/useEnhancedAudioRecorder';
 import { useSentences } from '@/hooks/useSentences';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdmin } from '@/hooks/useAdmin';
 import { usePracticeResults } from '@/hooks/usePracticeResults';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const Index = () => {
   
   const navigate = useNavigate();
   const { user, profile, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   const { saveResult } = usePracticeResults();
   
   const {
@@ -207,6 +209,20 @@ const Index = () => {
                   <DropdownMenuItem disabled className="text-muted-foreground">
                     {profile?.display_name || user?.email}
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/progress">
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Progress
+                    </Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin">
+                        <Shield className="w-4 h-4 mr-2" />
+                        Admin
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link to="/settings">
                       <Settings className="w-4 h-4 mr-2" />
