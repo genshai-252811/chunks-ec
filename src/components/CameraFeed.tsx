@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, VideoOff, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
+import { FaceTrackingOverlay } from './FaceTrackingOverlay';
 import { useFaceTracking, FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 
 interface CameraFeedProps {
@@ -22,14 +23,16 @@ export function CameraFeed({
 }: CameraFeedProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const frameLoopRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
+  const [videoDimensions, setVideoDimensions] = useState({ width: 1280, height: 720 });
 
   const { 
     isTracking, 
+    isModelLoaded,
     metrics: faceMetrics, 
+    currentFace,
     startTracking, 
     stopTracking, 
     processFrame 
@@ -58,6 +61,14 @@ export function CameraFeed({
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            if (videoRef.current) {
+              setVideoDimensions({
+                width: videoRef.current.videoWidth,
+                height: videoRef.current.videoHeight,
+              });
+            }
+          };
           await videoRef.current.play();
         }
 
@@ -101,25 +112,24 @@ export function CameraFeed({
   useEffect(() => {
     if (!isTracking || !videoRef.current) return;
 
-    const processLoop = async () => {
-      if (videoRef.current && isTracking) {
-        await processFrame(videoRef.current);
+    let frameId: number;
+    let lastTime = 0;
+    const targetInterval = 66; // ~15fps
+
+    const loop = (time: number) => {
+      if (time - lastTime >= targetInterval) {
+        if (videoRef.current && isTracking) {
+          processFrame(videoRef.current);
+        }
+        lastTime = time;
       }
-      frameLoopRef.current = requestAnimationFrame(processLoop);
+      frameId = requestAnimationFrame(loop);
     };
 
-    // Start processing at ~15fps to balance performance
-    const intervalId = setInterval(() => {
-      if (videoRef.current && isTracking) {
-        processFrame(videoRef.current);
-      }
-    }, 66); // ~15fps
+    frameId = requestAnimationFrame(loop);
 
     return () => {
-      if (frameLoopRef.current) {
-        cancelAnimationFrame(frameLoopRef.current);
-      }
-      clearInterval(intervalId);
+      cancelAnimationFrame(frameId);
     };
   }, [isTracking, processFrame]);
 
@@ -151,6 +161,15 @@ export function CameraFeed({
         style={{ transform: 'scaleX(-1)' }}
       />
 
+      {/* Face Tracking Overlay */}
+      <FaceTrackingOverlay
+        face={currentFace}
+        isTracking={isTracking}
+        isModelLoaded={isModelLoaded}
+        videoWidth={videoDimensions.width}
+        videoHeight={videoDimensions.height}
+      />
+
       {/* Floating Energy Indicator above head */}
       <FloatingEnergyIndicator 
         audioLevel={audioLevel} 
@@ -161,20 +180,20 @@ export function CameraFeed({
       <AnimatePresence>
         {isRecording && isActive && (
           <motion.div
-            className="absolute top-4 right-4 flex items-center gap-2 bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-10"
+            className="absolute top-4 right-4 flex items-center gap-2 bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-30"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
           >
             {faceMetrics.isLookingAtCamera ? (
               <>
-                <Eye className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-green-500 font-medium">Eye Contact</span>
+                <Eye className="w-4 h-4 text-primary" />
+                <span className="text-xs text-primary font-medium">Eye Contact</span>
               </>
             ) : (
               <>
-                <EyeOff className="w-4 h-4 text-amber-500" />
-                <span className="text-xs text-amber-500 font-medium">Look at camera</span>
+                <EyeOff className="w-4 h-4 text-accent" />
+                <span className="text-xs text-accent font-medium">Look at camera</span>
               </>
             )}
           </motion.div>
@@ -185,7 +204,7 @@ export function CameraFeed({
       <AnimatePresence>
         {isRecording && isActive && fullscreen && (
           <motion.div
-            className="absolute bottom-24 left-4 flex flex-col gap-1 bg-background/60 backdrop-blur-sm px-3 py-2 rounded-lg z-10"
+            className="absolute bottom-24 left-4 flex flex-col gap-1 bg-background/60 backdrop-blur-sm px-3 py-2 rounded-lg z-30"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
