@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Hand, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,27 @@ import { ScoreDisplay } from "./ScoreDisplay";
 import { MetricCard } from "./MetricCard";
 import { AnalysisResult } from "@/lib/audioAnalysis";
 import { FaceTrackingMetrics } from "@/hooks/useFaceTracking";
+
+interface MetricSetting {
+  metric_id: string;
+  weight: number;
+  enabled: boolean;
+}
+
+// Load enabled metrics from localStorage (synced from Admin panel)
+function getEnabledMetrics(): Set<string> {
+  try {
+    const stored = localStorage.getItem('audio_metric_settings');
+    if (stored) {
+      const settings: MetricSetting[] = JSON.parse(stored);
+      return new Set(settings.filter(m => m.enabled && m.weight > 0).map(m => m.metric_id));
+    }
+  } catch (e) {
+    console.error('Failed to load metric settings:', e);
+  }
+  // Default: all enabled
+  return new Set(['volume', 'speechRate', 'acceleration', 'responseTime', 'pauseManagement', 'eyeContact', 'handMovement', 'blinkRate']);
+}
 
 interface ResultsViewProps {
   results: AnalysisResult;
@@ -15,9 +36,11 @@ interface ResultsViewProps {
 
 export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const enabledMetrics = useMemo(() => getEnabledMetrics(), []);
 
-  const audioMetrics = [
+  const allAudioMetrics = [
     {
+      id: 'volume',
       title: "Voice Power",
       titleVi: "Công suất giọng nói",
       score: results.volume.score,
@@ -27,6 +50,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Volume2,
     },
     {
+      id: 'speechRate',
       title: "Speech Tempo",
       titleVi: "Nhịp độ nói",
       score: results.speechRate.score,
@@ -36,6 +60,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Zap,
     },
     {
+      id: 'acceleration',
       title: "Energy Boost",
       titleVi: "Tăng cường năng lượng",
       score: results.acceleration.score,
@@ -47,6 +72,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: TrendingUp,
     },
     {
+      id: 'responseTime',
       title: "Response Spark",
       titleVi: "Phản ứng nhanh",
       score: results.responseTime.score,
@@ -56,6 +82,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Clock,
     },
     {
+      id: 'pauseManagement',
       title: "Flow Control",
       titleVi: "Kiểm soát nhịp",
       score: results.pauses.score,
@@ -67,8 +94,9 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
   ];
 
   // Video metrics from face tracking
-  const videoMetrics = faceMetrics ? [
+  const allVideoMetrics = faceMetrics ? [
     {
+      id: 'eyeContact',
       title: "Eye Contact",
       titleVi: "Giao tiếp bằng mắt",
       score: faceMetrics.eyeContactScore,
@@ -78,6 +106,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Eye,
     },
     {
+      id: 'handMovement',
       title: "Hand Movement",
       titleVi: "Cử chỉ tay",
       score: Math.min(100, faceMetrics.handMovementScore),
@@ -87,6 +116,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Hand,
     },
     {
+      id: 'blinkRate',
       title: "Blink Rate",
       titleVi: "Tần suất chớp mắt",
       score: faceMetrics.blinkRate >= 10 && faceMetrics.blinkRate <= 25 ? 80 : 
@@ -98,6 +128,9 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
     },
   ] : [];
 
+  // Filter based on enabled settings from Admin panel
+  const audioMetrics = allAudioMetrics.filter(m => enabledMetrics.has(m.id));
+  const videoMetrics = allVideoMetrics.filter(m => enabledMetrics.has(m.id));
   const allMetrics = [...audioMetrics, ...videoMetrics];
 
   // Quick summary of top metrics
