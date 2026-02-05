@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Hand, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,14 +17,18 @@ interface MetricConfigItem {
 function getEnabledMetrics(): Set<string> {
   try {
     const stored = localStorage.getItem('metricConfig');
+    console.log('[ResultsView] metricConfig from localStorage:', stored);
     if (stored) {
       const settings: MetricConfigItem[] = JSON.parse(stored);
-      return new Set(settings.filter(m => m.enabled && m.weight > 0).map(m => m.id));
+      const enabled = settings.filter(m => m.enabled && m.weight > 0).map(m => m.id);
+      console.log('[ResultsView] Enabled metrics:', enabled);
+      return new Set(enabled);
     }
   } catch (e) {
     console.error('Failed to load metric settings:', e);
   }
   // Default: all enabled
+  console.log('[ResultsView] Using default metrics (no config found)');
   return new Set(['volume', 'speechRate', 'acceleration', 'responseTime', 'pauseManagement', 'eyeContact', 'handMovement', 'blinkRate']);
 }
 
@@ -36,7 +40,8 @@ interface ResultsViewProps {
 
 export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const enabledMetrics = useMemo(() => getEnabledMetrics(), []);
+  // Call getEnabledMetrics on every render to pick up latest localStorage values
+  const enabledMetrics = getEnabledMetrics();
 
   const allAudioMetrics = [
     {
