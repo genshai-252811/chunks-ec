@@ -210,28 +210,6 @@ export function ScoreDisplay({ score, emotionalFeedback }: ScoreDisplayProps) {
           </motion.span>
         </div>
 
-        {/* Rotating sparkle ring for excellent */}
-        {emotionalFeedback === 'excellent' && (
-          <motion.div
-            className="absolute inset-0 pointer-events-none"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-          >
-            {[...Array(6)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute w-2 h-2 bg-cyan-400 rounded-full"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: `rotate(${i * 60}deg) translateY(-85px) translateX(-50%)`,
-                }}
-                animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
-                transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
-              />
-            ))}
-          </motion.div>
-        )}
       </motion.div>
 
       {/* Feedback Badge */}
