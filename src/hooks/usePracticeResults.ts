@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AnalysisResult } from '@/lib/audioAnalysis';
+import { FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 
 export interface PracticeResult {
   id: string;
@@ -13,7 +14,16 @@ export interface PracticeResult {
   pace_score: number | null;
   volume_avg: number | null;
   speech_ratio: number | null;
+  eye_contact_score: number | null;
+  hand_movement_score: number | null;
+  blink_rate: number | null;
   created_at: string;
+}
+
+export interface VideoMetrics {
+  eyeContactScore?: number;
+  handMovementScore?: number;
+  blinkRate?: number;
 }
 
 export function usePracticeResults() {
@@ -24,7 +34,8 @@ export function usePracticeResults() {
   const saveResult = useCallback(async (
     analysisResult: AnalysisResult,
     sentenceId: string | null,
-    durationSeconds: number
+    durationSeconds: number,
+    videoMetrics?: VideoMetrics
   ) => {
     setError(null);
     
@@ -47,6 +58,9 @@ export function usePracticeResults() {
         pace_score: analysisResult.pauses?.score ?? null,
         volume_avg: analysisResult.volume?.averageDb ?? null,
         speech_ratio: analysisResult.pauses?.pauseRatio ?? null,
+        eye_contact_score: videoMetrics?.eyeContactScore ?? null,
+        hand_movement_score: videoMetrics?.handMovementScore ?? null,
+        blink_rate: videoMetrics?.blinkRate ?? null,
       })
       .select()
       .single();

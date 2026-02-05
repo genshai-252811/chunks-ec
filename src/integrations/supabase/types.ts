@@ -79,10 +79,13 @@ export type Database = {
       }
       practice_results: {
         Row: {
+          blink_rate: number | null
           clarity_score: number | null
           created_at: string
           duration_seconds: number
           energy_score: number | null
+          eye_contact_score: number | null
+          hand_movement_score: number | null
           id: string
           pace_score: number | null
           score: number
@@ -92,10 +95,13 @@ export type Database = {
           volume_avg: number | null
         }
         Insert: {
+          blink_rate?: number | null
           clarity_score?: number | null
           created_at?: string
           duration_seconds: number
           energy_score?: number | null
+          eye_contact_score?: number | null
+          hand_movement_score?: number | null
           id?: string
           pace_score?: number | null
           score: number
@@ -105,10 +111,13 @@ export type Database = {
           volume_avg?: number | null
         }
         Update: {
+          blink_rate?: number | null
           clarity_score?: number | null
           created_at?: string
           duration_seconds?: number
           energy_score?: number | null
+          eye_contact_score?: number | null
+          hand_movement_score?: number | null
           id?: string
           pace_score?: number | null
           score?: number

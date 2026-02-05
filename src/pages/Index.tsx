@@ -88,7 +88,12 @@ const Index = () => {
         
         // Save results to database if authenticated
         if (isAuthenticated && analysisResults) {
-          await saveResult(analysisResults, currentSentence?.id || null, recordingTime);
+          const videoMetrics = faceMetricsRef.current ? {
+            eyeContactScore: faceMetricsRef.current.eyeContactScore,
+            handMovementScore: faceMetricsRef.current.handMovementScore,
+            blinkRate: faceMetricsRef.current.blinkRate,
+          } : undefined;
+          await saveResult(analysisResults, currentSentence?.id || null, recordingTime, videoMetrics);
         }
         
         setTimeout(() => {
