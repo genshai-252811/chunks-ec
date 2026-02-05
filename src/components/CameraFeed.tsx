@@ -245,11 +245,16 @@ export function CameraFeed({
               <span className="text-foreground font-medium">{faceMetrics.eyeContactScore}%</span> eye contact
             </div>
             <div className="text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">{faceMetrics.headStillnessScore}%</span> head stillness
+              <span className="text-foreground font-medium">{faceMetrics.handMovementScore}</span> hand movement
             </div>
             <div className="text-xs text-muted-foreground">
               <span className="text-foreground font-medium">{faceMetrics.blinkRate}</span> blinks/min
             </div>
+            {faceMetrics.handsDetected > 0 && (
+              <div className="text-xs text-primary">
+                🖐️ {faceMetrics.handsDetected} hand{faceMetrics.handsDetected > 1 ? 's' : ''} detected
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Move, Sparkles } from "lucide-react";
+import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Hand, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreDisplay } from "./ScoreDisplay";
 import { MetricCard } from "./MetricCard";
@@ -78,13 +78,13 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       icon: Eye,
     },
     {
-      title: "Head Stillness",
-      titleVi: "Đầu ổn định",
-      score: faceMetrics.headStillnessScore,
-      value: `${faceMetrics.headStillnessScore}% stable`,
-      rawValue: faceMetrics.headStillnessScore,
-      tag: "POISE",
-      icon: Move,
+      title: "Hand Movement",
+      titleVi: "Cử chỉ tay",
+      score: Math.min(100, faceMetrics.handMovementScore),
+      value: `${faceMetrics.handMovementScore} activity`,
+      rawValue: faceMetrics.handMovementScore,
+      tag: "GESTURE",
+      icon: Hand,
     },
     {
       title: "Blink Rate",
