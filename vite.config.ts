@@ -18,4 +18,18 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: [
+      '@mediapipe/face_mesh',
+      '@mediapipe/hands',
+      '@mediapipe/camera_utils',
+      '@mediapipe/selfie_segmentation',
+    ],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
+  },
 }));
