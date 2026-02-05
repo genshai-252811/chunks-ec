@@ -203,7 +203,9 @@ export const MetricsTab = () => {
         },
         method: m.method,
       }));
+      console.log('💾 [MetricsTab] Saving to localStorage:', localConfig);
       localStorage.setItem('metricConfig', JSON.stringify(localConfig));
+      console.log('✅ [MetricsTab] Saved metricConfig to localStorage');
 
       toast({ title: 'Success', description: 'Metric settings saved.' });
       await fetchMetrics();

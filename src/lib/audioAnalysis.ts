@@ -537,21 +537,32 @@ function calculateOverallScore(results: {
       // Fall back to old metricConfig from database if new settings not available
       const config = getConfig();
       const oldWeights = {
-        volume: config.find((c) => c.id === "volume")?.weight || 40,
-        speechRate: config.find((c) => c.id === "speechRate")?.weight || 40,
-        acceleration: config.find((c) => c.id === "acceleration")?.weight || 5,
-        responseTime: config.find((c) => c.id === "responseTime")?.weight || 5,
-        pauseManagement: config.find((c) => c.id === "pauseManagement")?.weight || 10,
+        volume: config.find((c) => c.id === "volume")?.weight ?? 40,
+        speechRate: config.find((c) => c.id === "speechRate")?.weight ?? 40,
+        acceleration: config.find((c) => c.id === "acceleration")?.weight ?? 5,
+        responseTime: config.find((c) => c.id === "responseTime")?.weight ?? 5,
+        pauseManagement: config.find((c) => c.id === "pauseManagement")?.weight ?? 10,
       };
       const oldTotal = Object.values(oldWeights).reduce((a, b) => a + b, 0);
 
-      weights = {
-        volume: oldWeights.volume / oldTotal,
-        speechRate: oldWeights.speechRate / oldTotal,
-        acceleration: oldWeights.acceleration / oldTotal,
-        responseTime: oldWeights.responseTime / oldTotal,
-        pauses: oldWeights.pauseManagement / oldTotal,
-      };
+      // Avoid division by zero if all metrics are disabled
+      if (oldTotal === 0) {
+        weights = {
+          volume: 0,
+          speechRate: 0,
+          acceleration: 0,
+          responseTime: 0,
+          pauses: 0,
+        };
+      } else {
+        weights = {
+          volume: oldWeights.volume / oldTotal,
+          speechRate: oldWeights.speechRate / oldTotal,
+          acceleration: oldWeights.acceleration / oldTotal,
+          responseTime: oldWeights.responseTime / oldTotal,
+          pauses: oldWeights.pauseManagement / oldTotal,
+        };
+      }
     }
   } catch (error) {
     console.error('Failed to load metric weights, using defaults:', error);
