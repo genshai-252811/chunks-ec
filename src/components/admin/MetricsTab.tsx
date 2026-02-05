@@ -34,7 +34,7 @@ const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
   { metric_id: 'pauseManagement', weight: 10, min_threshold: 0, ideal_threshold: 0, max_threshold: 2.71, method: null, enabled: true },
   // Video-based metrics
   { metric_id: 'eyeContact', weight: 10, min_threshold: 0, ideal_threshold: 80, max_threshold: 100, method: 'percentage', enabled: true },
-  { metric_id: 'headStillness', weight: 5, min_threshold: 0, ideal_threshold: 85, max_threshold: 100, method: 'percentage', enabled: true },
+  { metric_id: 'handMovement', weight: 5, min_threshold: 0, ideal_threshold: 50, max_threshold: 100, method: 'activity_score', enabled: true },
   { metric_id: 'blinkRate', weight: 5, min_threshold: 10, ideal_threshold: 15, max_threshold: 25, method: 'count_per_minute', enabled: true },
 ];
 
@@ -47,7 +47,7 @@ const METRIC_LABELS: Record<string, { name: string; description: string; unit: s
   pauseManagement: { name: 'Fluidity (Pauses)', description: 'Pause ratio', unit: 'ratio', color: 'bg-pink-500', category: 'audio' },
   // Video metrics
   eyeContact: { name: 'Eye Contact', description: 'Looking at camera percentage', unit: '%', color: 'bg-cyan-500', category: 'video' },
-  headStillness: { name: 'Head Stillness', description: 'Minimal head movement', unit: '%', color: 'bg-amber-500', category: 'video' },
+  handMovement: { name: 'Hand Movement', description: 'Hand gesture activity level', unit: 'score', color: 'bg-amber-500', category: 'video' },
   blinkRate: { name: 'Blink Rate', description: 'Blinks per minute (natural is 15-20)', unit: 'bpm', color: 'bg-rose-500', category: 'video' },
 };
 
@@ -175,19 +175,21 @@ export const MetricsTab = () => {
     const rebalanced = rebalanceWeights(metrics);
     setIsSaving(true);
     try {
-      await supabase.from('metric_settings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-      const toInsert = rebalanced.map(m => ({
-        metric_id: m.metric_id,
-        weight: m.enabled ? m.weight : 0,
-        min_threshold: m.min_threshold,
-        ideal_threshold: m.ideal_threshold,
-        max_threshold: m.max_threshold,
-        method: m.method,
-      }));
-
-      const { error } = await supabase.from('metric_settings').insert(toInsert);
-      if (error) throw error;
+      // Use upsert instead of delete+insert to avoid unique constraint issues
+      for (const m of rebalanced) {
+        const { error } = await supabase
+          .from('metric_settings')
+          .upsert({
+            metric_id: m.metric_id,
+            weight: m.enabled ? m.weight : 0,
+            min_threshold: m.min_threshold,
+            ideal_threshold: m.ideal_threshold,
+            max_threshold: m.max_threshold,
+            method: m.method,
+          }, { onConflict: 'metric_id' });
+        
+        if (error) throw error;
+      }
 
       // Update localStorage for immediate effect
       const localConfig = rebalanced.map(m => ({
