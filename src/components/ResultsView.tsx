@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, ChevronDown, ChevronUp, Volume2, Zap, TrendingUp, Clock, Waves, Sliders, ArrowRight, Eye, Hand, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { ScoreDisplay } from "./ScoreDisplay";
 import { MetricCard } from "./MetricCard";
 import { AnalysisResult } from "@/lib/audioAnalysis";
 import { FaceTrackingMetrics } from "@/hooks/useFaceTracking";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MetricConfigItem {
   id: string;
@@ -13,20 +14,6 @@ interface MetricConfigItem {
   enabled: boolean;
 }
 
-// Load enabled metrics from localStorage (synced from Admin panel's metricConfig key)
-function getEnabledMetrics(): Set<string> {
-  try {
-    const stored = localStorage.getItem('metricConfig');
-    if (stored) {
-      const settings: MetricConfigItem[] = JSON.parse(stored);
-      return new Set(settings.filter(m => m.enabled && m.weight > 0).map(m => m.id));
-    }
-  } catch (e) {
-    console.error('Failed to load metric settings:', e);
-  }
-  // Default: all enabled
-  return new Set(['volume', 'speechRate', 'acceleration', 'responseTime', 'pauseManagement', 'eyeContact', 'handMovement', 'blinkRate']);
-}
 
 interface ResultsViewProps {
   results: AnalysisResult;
@@ -36,7 +23,87 @@ interface ResultsViewProps {
 
 export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const enabledMetrics = useMemo(() => getEnabledMetrics(), []);
+  const [enabledMetrics, setEnabledMetrics] = useState<Set<string>>(
+    // Default: all enabled until we load from storage/database
+    new Set(['volume', 'speechRate', 'acceleration', 'responseTime', 'pauseManagement', 'eyeContact', 'handMovement', 'blinkRate'])
+  );
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+
+  // Load metric config from localStorage or database
+  useEffect(() => {
+    const loadMetricConfig = async () => {
+      try {
+        // First, try localStorage
+        const stored = localStorage.getItem('metricConfig');
+        console.log('🔍 [ResultsView] Reading metricConfig from localStorage:', stored);
+
+        if (stored) {
+          // Parse and use localStorage config
+          const settings: MetricConfigItem[] = JSON.parse(stored);
+          console.log('📊 [ResultsView] Parsed settings from localStorage:', settings);
+
+          const enabledMetrics = settings.filter(m => {
+            const isEnabled = m.enabled === true && m.weight > 0;
+            console.log(`  - ${m.id}: enabled=${m.enabled}, weight=${m.weight}, included=${isEnabled}`);
+            return isEnabled;
+          });
+
+          const metricIds = new Set(enabledMetrics.map(m => m.id));
+          console.log('✅ [ResultsView] Enabled metrics from localStorage:', Array.from(metricIds));
+          setEnabledMetrics(metricIds);
+        } else {
+          // localStorage is null, load from database
+          console.log('⚠️ [ResultsView] localStorage is null, loading from database...');
+
+          const { data, error } = await supabase
+            .from('metric_settings')
+            .select('metric_id, weight');
+
+          if (error) {
+            console.error('❌ [ResultsView] Failed to load from database:', error);
+            console.log('⚠️ [ResultsView] Using default metrics (database error)');
+          } else if (data && data.length > 0) {
+            console.log('📊 [ResultsView] Loaded settings from database:', data);
+
+            // Convert database format to our format
+            const dbSettings: MetricConfigItem[] = data.map(m => ({
+              id: m.metric_id,
+              weight: m.weight,
+              enabled: m.weight > 0,
+            }));
+
+            const enabledMetrics = dbSettings.filter(m => {
+              const isEnabled = m.enabled === true && m.weight > 0;
+              console.log(`  - ${m.id}: weight=${m.weight}, included=${isEnabled}`);
+              return isEnabled;
+            });
+
+            const metricIds = new Set(enabledMetrics.map(m => m.id));
+            console.log('✅ [ResultsView] Enabled metrics from database:', Array.from(metricIds));
+            setEnabledMetrics(metricIds);
+
+            // Cache to localStorage for next time
+            const cacheConfig = dbSettings.map(m => ({
+              id: m.id,
+              weight: m.weight,
+              enabled: m.enabled,
+            }));
+            localStorage.setItem('metricConfig', JSON.stringify(cacheConfig));
+            console.log('💾 [ResultsView] Cached config to localStorage');
+          } else {
+            console.log('⚠️ [ResultsView] No settings in database, using defaults');
+          }
+        }
+      } catch (e) {
+        console.error('❌ [ResultsView] Failed to load metric config:', e);
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    };
+
+    loadMetricConfig();
+  }, []);
+
 
   const allAudioMetrics = [
     {
@@ -119,8 +186,8 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       id: 'blinkRate',
       title: "Blink Rate",
       titleVi: "Tần suất chớp mắt",
-      score: faceMetrics.blinkRate >= 10 && faceMetrics.blinkRate <= 25 ? 80 : 
-             faceMetrics.blinkRate >= 5 && faceMetrics.blinkRate <= 30 ? 60 : 40,
+      score: faceMetrics.blinkRate >= 10 && faceMetrics.blinkRate <= 25 ? 80 :
+        faceMetrics.blinkRate >= 5 && faceMetrics.blinkRate <= 30 ? 60 : 40,
       value: `${faceMetrics.blinkRate} blinks/min`,
       rawValue: faceMetrics.blinkRate,
       tag: "NATURAL",
@@ -133,14 +200,21 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
   const videoMetrics = allVideoMetrics.filter(m => enabledMetrics.has(m.id));
   const allMetrics = [...audioMetrics, ...videoMetrics];
 
-  // Quick summary of top metrics
-  const topMetric = allMetrics.reduce((a, b) => a.score > b.score ? a : b);
-  const needsWork = allMetrics.reduce((a, b) => a.score < b.score ? a : b);
+  console.log('📈 [ResultsView] Filtered audio metrics:', audioMetrics.map(m => m.id));
+  console.log('📹 [ResultsView] Filtered video metrics:', videoMetrics.map(m => m.id));
+  console.log('📊 [ResultsView] Total metrics to display:', allMetrics.length);
+
+  // Quick summary of top metrics (only if we have metrics enabled)
+  const topMetric = allMetrics.length > 0 ? allMetrics.reduce((a, b) => a.score > b.score ? a : b) : null;
+  const needsWork = allMetrics.length > 0 ? allMetrics.reduce((a, b) => a.score < b.score ? a : b) : null;
+
+  // Only show Quick Insights if we have at least 2 different metrics
+  const shouldShowQuickInsights = allMetrics.length >= 2 && topMetric && needsWork && topMetric.id !== needsWork.id;
 
   return (
     <div className="w-full max-w-md mx-auto px-4 pb-8">
       {/* Score Display */}
-      <motion.div 
+      <motion.div
         className="mb-6"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -152,39 +226,41 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
       </motion.div>
 
       {/* Quick Insights Card */}
-      <motion.div
-        className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-sm border border-border/50"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Strongest</p>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <topMetric.icon className="w-4 h-4 text-emerald-400" />
+      {shouldShowQuickInsights && (
+        <motion.div
+          className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-sm border border-border/50"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Strongest</p>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <topMetric.icon className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{topMetric.title}</p>
+                  <p className="text-xs text-emerald-400">{topMetric.score} pts</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{topMetric.title}</p>
-                <p className="text-xs text-emerald-400">{topMetric.score} pts</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Focus Area</p>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <needsWork.icon className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{needsWork.title}</p>
+                  <p className="text-xs text-amber-400">{needsWork.score} pts</p>
+                </div>
               </div>
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Focus Area</p>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <needsWork.icon className="w-4 h-4 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{needsWork.title}</p>
-                <p className="text-xs text-amber-400">{needsWork.score} pts</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
 
       {/* Show Details Toggle */}
       <motion.button
@@ -219,7 +295,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
             className="space-y-3 mb-8 overflow-hidden pt-4"
           >
             {results.normalization && (
-              <motion.div 
+              <motion.div
                 className="rounded-xl border border-border/50 bg-muted/30 p-4"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -258,7 +334,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
                 <Volume2 className="w-3 h-3" /> Audio Analysis
               </p>
             </motion.div>
-            
+
             {audioMetrics.map((metric, index) => (
               <MetricCard
                 key={metric.tag}
@@ -280,7 +356,7 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
                     <Eye className="w-3 h-3" /> Video Analysis
                   </p>
                 </motion.div>
-                
+
                 {videoMetrics.map((metric, index) => (
                   <MetricCard
                     key={metric.tag}
