@@ -7,19 +7,19 @@ import { MetricCard } from "./MetricCard";
 import { AnalysisResult } from "@/lib/audioAnalysis";
 import { FaceTrackingMetrics } from "@/hooks/useFaceTracking";
 
-interface MetricSetting {
-  metric_id: string;
+interface MetricConfigItem {
+  id: string;
   weight: number;
   enabled: boolean;
 }
 
-// Load enabled metrics from localStorage (synced from Admin panel)
+// Load enabled metrics from localStorage (synced from Admin panel's metricConfig key)
 function getEnabledMetrics(): Set<string> {
   try {
-    const stored = localStorage.getItem('audio_metric_settings');
+    const stored = localStorage.getItem('metricConfig');
     if (stored) {
-      const settings: MetricSetting[] = JSON.parse(stored);
-      return new Set(settings.filter(m => m.enabled && m.weight > 0).map(m => m.metric_id));
+      const settings: MetricConfigItem[] = JSON.parse(stored);
+      return new Set(settings.filter(m => m.enabled && m.weight > 0).map(m => m.id));
     }
   } catch (e) {
     console.error('Failed to load metric settings:', e);
