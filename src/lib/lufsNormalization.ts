@@ -34,7 +34,7 @@ export interface RecalibrationSuggestion {
 }
 
 const CALIBRATION_STORAGE_KEY = 'audio_calibration_profiles';
-const TARGET_LUFS = -23;  // EBU R128 standard for broadcast
+export const TARGET_LUFS = -23;  // EBU R128 standard for broadcast
 const MAX_RECORDING_HISTORY = 10;  // Keep last 10 recordings for variance tracking
 const VARIANCE_THRESHOLD = 5;  // LUFS variance threshold for recalibration suggestion
 

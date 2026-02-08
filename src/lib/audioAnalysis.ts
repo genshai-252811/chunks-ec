@@ -1,7 +1,7 @@
 // Audio Analysis Metrics for Voice Energy App
 // NOTE: This file contains the CORE ANALYSIS LOGIC that must NOT be changed
 
-import { calibrateAndNormalize, calculateNoiseFloor } from './lufsNormalization';
+import { calibrateAndNormalize, calculateNoiseFloor, getCalibrationProfile, TARGET_LUFS } from './lufsNormalization';
 
 // VAD Metrics interface (from useEnhancedAudioRecorder)
 export interface SpeechSegment {
@@ -118,7 +118,7 @@ export interface AnalysisResult {
 
 // ============ ANALYSIS FUNCTIONS (DO NOT MODIFY) ============
 
-function analyzeVolume(audioBuffer: Float32Array): VolumeResult {
+function analyzeVolume(audioBuffer: Float32Array, deviceDbOffset: number = 0): VolumeResult {
   const config = getMetricConfig("volume") || { thresholds: { min: -35, ideal: -15, max: 0 } };
   const { min, ideal, max } = config.thresholds;
 
@@ -129,17 +129,39 @@ function analyzeVolume(audioBuffer: Float32Array): VolumeResult {
   }
   const rms = Math.sqrt(sum / audioBuffer.length);
 
-  // Convert to dB
-  const db = 20 * Math.log10(Math.max(rms, 1e-10));
+  // Convert to dB and apply device offset for cross-device comparability.
+  // The offset compensates for mic sensitivity differences WITHOUT erasing
+  // the actual loud vs quiet difference in the user's voice.
+  const rawDb = 20 * Math.log10(Math.max(rms, 1e-10));
+  const db = rawDb + deviceDbOffset;
 
-  // Score calculation
+  if (deviceDbOffset !== 0) {
+    console.log(`🔊 Volume: rawDb=${rawDb.toFixed(1)}, offset=${deviceDbOffset.toFixed(1)}, adjustedDb=${db.toFixed(1)}`);
+  }
+
+  // Score calculation:
+  // - Below min: 0 (too quiet)
+  // - min to ideal: linear 0→90 (louder = better)
+  // - ideal to max: 90→100 peak then back to 90 (sweet spot near ideal)
+  // - Above max: drops from 90 (too loud / clipping)
   let score = 0;
-  if (db >= ideal) {
-    score = 100 - ((db - ideal) / (max - ideal)) * 30;
+  if (db >= ideal && db <= max) {
+    // Near ideal = best score. Peak at midpoint between ideal and max.
+    const midpoint = (ideal + max) / 2;
+    if (db <= midpoint) {
+      score = 90 + ((db - ideal) / (midpoint - ideal)) * 10;
+    } else {
+      score = 100 - ((db - midpoint) / (max - midpoint)) * 10;
+    }
+  } else if (db > max) {
+    // Above max: penalty for clipping/too loud
+    score = Math.max(0, 90 - (db - max) * 5);
   } else if (db >= min) {
-    score = 70 + ((db - min) / (ideal - min)) * 30;
+    // Between min and ideal: linear climb 0→90
+    score = ((db - min) / (ideal - min)) * 90;
   } else {
-    score = Math.max(0, 70 * (1 - (min - db) / 20));
+    // Below min: too quiet
+    score = 0;
   }
 
   return {
@@ -597,6 +619,8 @@ export async function analyzeAudioAsync(
   let normalizationInfo = undefined;
 
   // Apply LUFS normalization with device calibration if deviceId is provided
+  // The normalized buffer is used for speech rate, acceleration, pauses, response time
+  // but NOT for volume scoring (see below)
   if (deviceId) {
     const result = calibrateAndNormalize(audioBuffer, sampleRate, deviceId);
     processedBuffer = result.normalized;
@@ -620,8 +644,24 @@ export async function analyzeAudioAsync(
     });
   }
 
-  // Perform all analyses on normalized audio with VAD enhancement
-  const volume = analyzeVolume(processedBuffer);
+  // Calculate device dB offset for volume scoring.
+  // This compensates for mic sensitivity (quiet mic vs loud mic) so the same
+  // actual voice energy produces the same score on any device.
+  // Unlike full LUFS normalization, this preserves loud vs quiet differences.
+  let deviceDbOffset = 0;
+  if (deviceId) {
+    const profile = getCalibrationProfile(deviceId);
+    if (profile) {
+      deviceDbOffset = TARGET_LUFS - profile.referenceLevel;
+      console.log(`🎚️ Volume offset: ${deviceDbOffset.toFixed(1)} dB (ref=${profile.referenceLevel.toFixed(1)} LUFS, target=${TARGET_LUFS} LUFS)`);
+    }
+  }
+
+  // Volume: analyze on RAW audio buffer + device offset (NOT LUFS-normalized)
+  // This ensures loud speech = high score, quiet speech = low score
+  const volume = analyzeVolume(audioBuffer, deviceDbOffset);
+
+  // Other metrics: use LUFS-normalized buffer (they benefit from consistent levels)
   const speechRate = analyzeSpeechRate(processedBuffer, sampleRate, vadMetrics);
   const acceleration = analyzeAcceleration(processedBuffer, sampleRate, vadMetrics);
   const responseTime = analyzeResponseTime(processedBuffer, sampleRate);

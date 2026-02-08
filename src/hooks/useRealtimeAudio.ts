@@ -23,6 +23,9 @@ export function useRealtimeAudio(enabled: boolean = false) {
   const animationFrameRef = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array>(new Float32Array(0));
   const bufferIndexRef = useRef(0);
+  const smoothedLevelRef = useRef(0);
+  const lastLufsRef = useRef<number | null>(null);
+  const frameCountRef = useRef(0);
 
   const updateMetrics = useCallback(() => {
     if (!analyzerRef.current || !dataArrayRef.current) return;
@@ -33,13 +36,16 @@ export function useRealtimeAudio(enabled: boolean = false) {
     // Get time domain data
     analyzer.getFloatTimeDomainData(dataArray);
 
-    // Calculate RMS level
+    // Calculate RMS level with exponential smoothing to prevent jumpiness
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) {
       sum += dataArray[i] * dataArray[i];
     }
     const rms = Math.sqrt(sum / dataArray.length);
-    const audioLevel = Math.min(1, rms * 5); // Scale for better visibility
+    const rawLevel = Math.min(1, rms * 5);
+    // Smooth: 30% old value + 70% new value (same as useEnhancedAudioRecorder)
+    smoothedLevelRef.current = smoothedLevelRef.current * 0.3 + rawLevel * 0.7;
+    const audioLevel = smoothedLevelRef.current;
 
     // Store samples for LUFS calculation (need ~400ms of audio)
     const sampleRate = audioContextRef.current?.sampleRate || 48000;
@@ -56,11 +62,16 @@ export function useRealtimeAudio(enabled: boolean = false) {
       bufferIndexRef.current = (bufferIndexRef.current + 1) % requiredSamples;
     }
 
-    // Calculate LUFS every few frames (not every frame for performance)
-    let lufs: number | null = null;
-    if (Math.random() < 0.1) { // ~10% of frames
+    // Calculate LUFS every 6 frames (~10Hz) instead of random 10%.
+    // Keep last value between calculations so display doesn't flicker.
+    frameCountRef.current++;
+    if (frameCountRef.current >= 6) {
+      frameCountRef.current = 0;
       try {
-        lufs = calculateLUFS(bufferRef.current, sampleRate);
+        const computed = calculateLUFS(bufferRef.current, sampleRate);
+        if (isFinite(computed)) {
+          lastLufsRef.current = computed;
+        }
       } catch (err) {
         // Silently fail - might not have enough data yet
       }
@@ -68,7 +79,7 @@ export function useRealtimeAudio(enabled: boolean = false) {
 
     setMetrics({
       audioLevel,
-      lufs,
+      lufs: lastLufsRef.current,
       isActive: audioLevel > 0.01,
     });
 
@@ -144,6 +155,9 @@ export function useRealtimeAudio(enabled: boolean = false) {
     dataArrayRef.current = null;
     bufferRef.current = new Float32Array(0);
     bufferIndexRef.current = 0;
+    smoothedLevelRef.current = 0;
+    lastLufsRef.current = null;
+    frameCountRef.current = 0;
 
     // Reset metrics
     setMetrics({
