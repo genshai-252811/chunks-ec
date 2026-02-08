@@ -867,6 +867,27 @@ export async function analyzeAudioAsync(
   const responseTime = analyzeResponseTime(processedBuffer, sampleRate);
   const pauses = analyzePauses(processedBuffer, sampleRate, vadMetrics);
 
+  // Check for silence/no speech detected
+  // If VAD detected no speech OR volume is extremely low, return very low score
+  const hasSpeech = vadMetrics && vadMetrics.totalSpeechTime > 0;
+  const hasVolume = volume.averageDb > -60; // -60 dB is essentially silence
+  const isSilent = !hasSpeech || !hasVolume;
+
+  if (isSilent) {
+    console.warn('⚠️ No speech detected in recording (silence or very low volume)');
+    // Return very low scores for all metrics when silent
+    return {
+      overallScore: 0,
+      emotionalFeedback: 'poor',
+      volume: { ...volume, score: 0 },
+      speechRate: { ...speechRate, score: 0 },
+      acceleration: { ...acceleration, score: 0 },
+      responseTime: { ...responseTime, score: 0 },
+      pauses: { ...pauses, score: 0 },
+      normalization: normalizationInfo,
+    };
+  }
+
   const overallScore = calculateOverallScore({
     volume,
     speechRate,
