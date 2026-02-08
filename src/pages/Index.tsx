@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, ChevronLeft, ChevronRight, LogOut, User, BarChart3, Shield } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight, LogOut, User, BarChart3, Shield, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ResultsView } from '@/components/ResultsView';
@@ -379,6 +379,40 @@ export default function Index() {
         </AnimatePresence>
       </main>
     </div>
+
+    {/* Processing Overlay - shows analyzing state */}
+    <AnimatePresence>
+      {appState === 'processing' && (
+        <motion.div
+          key="processing"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="flex flex-col items-center gap-4"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+          >
+            <div className="relative">
+              <motion.div
+                className="w-16 h-16 rounded-full border-4 border-primary/20"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-4 -mt-2 rounded-full bg-primary" />
+              </motion.div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-medium text-foreground">Analyzing...</p>
+              <p className="text-sm text-muted-foreground mt-1">Processing your voice energy</p>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
 
     {/* Recording Overlay - renders on top when recording */}
     <AnimatePresence>
