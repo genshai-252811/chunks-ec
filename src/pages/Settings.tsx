@@ -1,31 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Save, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Loader2, Save, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
-
-interface MetricSetting {
-  id: string; // This is actually the UUID of the row
-  metric_id: string;
-  weight: number;
-  min_threshold: number;
-  ideal_threshold: number;
-  max_threshold: number;
-  method: string | null;
-  enabled: boolean;
-}
+import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
 
 const METRIC_LABELS: Record<string, { name: string; description: string; unit: string; color: string; category: 'audio' | 'video' }> = {
   // Audio metrics
@@ -146,6 +125,25 @@ export default function Settings() {
     setHasChanges(true);
   };
 
+  const handleThresholdChange = (index: number, field: 'min' | 'ideal' | 'max', value: number) => {
+    const updated = [...metrics];
+    const fieldMap = {
+      min: 'min_threshold',
+      ideal: 'ideal_threshold',
+      max: 'max_threshold'
+    };
+    (updated[index] as any)[fieldMap[field]] = value;
+    setMetrics(updated);
+    setHasChanges(true);
+  };
+
+  const handleMethodChange = (index: number, method: string) => {
+    const updated = [...metrics];
+    updated[index].method = method;
+    setMetrics(updated);
+    setHasChanges(true);
+  };
+
   const saveSettings = async () => {
     try {
       setIsSaving(true);
@@ -159,11 +157,9 @@ export default function Settings() {
 
       const normalizedMetrics = metrics.map(m => ({
         ...m,
-        // If disabled, saved weight should be 0 effectively for logic, but we might want to preserve the UI weight?
-        // Actually, existing logic often treats weight=0 as disabled.
-        // Let's save the actual weight but if disabled maybe we don't zero it in DB?
-        // The table has 'enabled' column.
-        weight: m.weight, // Save the weight as is
+        weight: m.weight, // Users can set arbitrary weights, normalization happens on load/display or we trust their setting?
+        // Actually, if we don't normalize here, their score might not sum to 100.
+        // For now, let's just save what they set.
         enabled: m.enabled
       }));
 
@@ -278,39 +274,15 @@ export default function Settings() {
             if (!label) return null;
 
             return (
-              <Card key={metric.metric_id} className={`overflow-hidden transition-all ${metric.enabled ? '' : 'opacity-70 grayscale'}`}>
-                <div className={`h-1 w-full ${metric.enabled ? label.color.replace('bg-', 'bg-opacity-80 bg-') : 'bg-gray-200'}`} />
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      {label.name}
-                    </CardTitle>
-                    <Switch
-                      checked={metric.enabled}
-                      onCheckedChange={(checked) => toggleMetric(index, checked)}
-                    />
-                  </div>
-                  <CardDescription>{label.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <label className="font-medium">Impact Weight</label>
-                        <span className="text-muted-foreground">{metric.weight} points</span>
-                      </div>
-                      <Slider
-                        value={[metric.weight]}
-                        min={0}
-                        max={100}
-                        step={5}
-                        disabled={!metric.enabled}
-                        onValueChange={(val) => handleWeightChange(index, val[0])}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <MetricSettingsCard
+                key={metric.metric_id}
+                metric={metric}
+                label={label}
+                onToggle={(id, checked) => toggleMetric(index, checked)}
+                onWeightChange={(id, val) => handleWeightChange(index, val)}
+                onThresholdChange={(id, field, val) => handleThresholdChange(index, field, val)}
+                onMethodChange={(id, method) => handleMethodChange(index, method)}
+              />
             );
           })}
         </div>

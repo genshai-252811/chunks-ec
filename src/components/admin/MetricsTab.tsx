@@ -1,37 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Save, RotateCcw, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-interface MetricSetting {
-  id: string;
-  metric_id: string;
-  weight: number;
-  min_threshold: number;
-  ideal_threshold: number;
-  max_threshold: number;
-  method: string | null;
-  enabled: boolean; // Local state - weight > 0 means enabled
-}
+import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
 
 const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
   { metric_id: 'volume', weight: 30, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
@@ -398,106 +379,15 @@ export const MetricsTab = () => {
             const label = METRIC_LABELS[metric.metric_id] || { name: metric.metric_id, description: '', unit: '', color: 'bg-muted', category: 'audio' };
 
             return (
-              <Card key={metric.metric_id} className={`transition-opacity ${!metric.enabled && 'opacity-50'}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        id={`toggle-${metric.metric_id}`}
-                        checked={metric.enabled}
-                        onCheckedChange={() => handleToggle(metric.metric_id)}
-                      />
-                      <div>
-                        <CardTitle className="text-base">{label.name}</CardTitle>
-                        <CardDescription className="text-xs">{label.description}</CardDescription>
-                      </div>
-                    </div>
-                    <div className={`w-3 h-3 rounded-full ${label.color}`} title="Color indicator" />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Weight */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <Label>Weight</Label>
-                      <span className="text-muted-foreground font-medium">{metric.weight}%</span>
-                    </div>
-                    <Slider
-                      value={[metric.weight]}
-                      onValueChange={([v]) => handleWeightChange(metric.metric_id, v)}
-                      min={0}
-                      max={100}
-                      step={5}
-                      disabled={!metric.enabled}
-                    />
-                  </div>
-
-                  {/* Thresholds */}
-                  {metric.enabled && (
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label className="text-xs">Min ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.min_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'min_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Ideal ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.ideal_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'ideal_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Max ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.max_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'max_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Detection Method (speechRate only) */}
-                  {metric.enabled && metric.metric_id === 'speechRate' && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Detection Method</Label>
-                      <Select
-                        value={metric.method || 'spectral-flux'}
-                        onValueChange={(value) => handleMethodChange(metric.metric_id, value)}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="energy-peaks">Energy Peaks (Basic)</SelectItem>
-                          <SelectItem value="vad-enhanced">VAD Enhanced (Better)</SelectItem>
-                          <SelectItem value="spectral-flux">Spectral Flux (Best)</SelectItem>
-                          <SelectItem value="web-speech-api">Web Speech API (Browser STT)</SelectItem>
-                          <SelectItem value="deepgram-stt">Deepgram STT (Most Accurate)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {metric.method === 'web-speech-api' && (
-                        <p className="text-xs text-muted-foreground">
-                          Uses browser speech recognition. Works best in Chrome/Edge.
-                        </p>
-                      )}
-                      {metric.method === 'deepgram-stt' && (
-                        <p className="text-xs text-muted-foreground">
-                          Uses Deepgram AI for most accurate transcription. Requires internet connection.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <MetricSettingsCard
+                key={metric.metric_id}
+                metric={metric}
+                label={label}
+                onToggle={(id, checked) => handleToggle(id)}
+                onWeightChange={(id, val) => handleWeightChange(id, val)}
+                onThresholdChange={(id, field, val) => handleThresholdChange(id, field as any, val)}
+                onMethodChange={(id, method) => handleMethodChange(id, method)}
+              />
             );
           })}
         </div>
@@ -511,80 +401,21 @@ export const MetricsTab = () => {
         <div className="grid gap-4 md:grid-cols-2">
           {metrics.filter(m => METRIC_LABELS[m.metric_id]?.category === 'video').map((metric) => {
             const label = METRIC_LABELS[metric.metric_id] || { name: metric.metric_id, description: '', unit: '', color: 'bg-muted', category: 'video' };
-
             return (
-              <Card key={metric.metric_id} className={`transition-opacity ${!metric.enabled && 'opacity-50'}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        id={`toggle-${metric.metric_id}`}
-                        checked={metric.enabled}
-                        onCheckedChange={() => handleToggle(metric.metric_id)}
-                      />
-                      <div>
-                        <CardTitle className="text-base">{label.name}</CardTitle>
-                        <CardDescription className="text-xs">{label.description}</CardDescription>
-                      </div>
-                    </div>
-                    <div className={`w-3 h-3 rounded-full ${label.color}`} title="Color indicator" />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Weight */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <Label>Weight</Label>
-                      <span className="text-muted-foreground font-medium">{metric.weight}%</span>
-                    </div>
-                    <Slider
-                      value={[metric.weight]}
-                      onValueChange={([v]) => handleWeightChange(metric.metric_id, v)}
-                      min={0}
-                      max={100}
-                      step={5}
-                      disabled={!metric.enabled}
-                    />
-                  </div>
-
-                  {/* Thresholds */}
-                  {metric.enabled && (
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label className="text-xs">Min ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.min_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'min_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Ideal ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.ideal_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'ideal_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Max ({label.unit})</Label>
-                        <Input
-                          type="number"
-                          value={metric.max_threshold}
-                          onChange={(e) => handleThresholdChange(metric.metric_id, 'max_threshold', parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <MetricSettingsCard
+                key={metric.metric_id}
+                metric={metric}
+                label={label}
+                onToggle={(id, checked) => handleToggle(id)}
+                onWeightChange={(id, val) => handleWeightChange(id, val)}
+                onThresholdChange={(id, field, val) => handleThresholdChange(id, field as any, val)}
+                // Video metrics don't support method change yet, or use fixed methods
+                readOnly={false}
+              />
             );
           })}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
