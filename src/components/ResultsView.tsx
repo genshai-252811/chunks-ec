@@ -82,14 +82,11 @@ export function ResultsView({ results, faceMetrics, onRetry }: ResultsViewProps)
             console.log('✅ [ResultsView] Enabled metrics from database:', Array.from(metricIds));
             setEnabledMetrics(metricIds);
 
-            // Cache to localStorage for next time
-            const cacheConfig = dbSettings.map(m => ({
-              id: m.id,
-              weight: m.weight,
-              enabled: m.enabled,
-            }));
-            localStorage.setItem('metricConfig', JSON.stringify(cacheConfig));
-            console.log('💾 [ResultsView] Cached config to localStorage');
+            // NOTE: We do NOT cache to localStorage here because the database
+            // query only returns id/weight and would overwrite the complete config
+            // (with thresholds, method, etc.) that was saved by the admin panel.
+            // The admin panel is the authoritative source for localStorage config.
+            console.log('ℹ️ [ResultsView] Loaded from database (not caching to localStorage)');
           } else {
             console.log('⚠️ [ResultsView] No settings in database, using defaults');
           }
