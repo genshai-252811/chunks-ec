@@ -72,7 +72,7 @@ function getPerformanceLabel(tag: string, score: number, rawValue?: number): { l
   return { label: '', color: '' };
 }
 
-export function MetricCard({ title, titleVi, score, tag, value, index, rawValue }: MetricCardProps) {
+export const MetricCard = ({ title, titleVi, score, tag, value, index, rawValue }: MetricCardProps) => {
   const performance = getPerformanceLabel(tag, score, rawValue);
 
   return (
