@@ -121,8 +121,8 @@ export interface AnalysisResult {
 // ============ ANALYSIS FUNCTIONS (DO NOT MODIFY) ============
 
 function analyzeVolume(audioBuffer: Float32Array, deviceDbOffset: number = 0): VolumeResult {
-  const config = getMetricConfig("volume") || { thresholds: { min: -35, ideal: -15, max: 0 } };
-  const { min, ideal, max } = config.thresholds;
+  const config = getMetricConfig("volume");
+  const { min, ideal, max } = config?.thresholds ?? { min: -35, ideal: -15, max: 0 };
 
   // Calculate RMS
   let sum = 0;
@@ -413,8 +413,8 @@ function analyzeSpeechRate(
   vadMetrics?: VADMetrics,
   sttWordCount?: number
 ): SpeechRateResult {
-  const config = getMetricConfig("speechRate") || { thresholds: { min: 90, ideal: 150, max: 220 } };
-  const { min, ideal, max } = config.thresholds;
+  const config = getMetricConfig("speechRate");
+  const { min, ideal, max } = config?.thresholds ?? { min: 90, ideal: 150, max: 220 };
 
   // Read admin-configured method (activates previously dead getSpeechRateMethod())
   const configuredMethod = getSpeechRateMethod();
@@ -589,8 +589,8 @@ function analyzeAcceleration(
 }
 
 function analyzeResponseTime(audioBuffer: Float32Array, sampleRate: number): ResponseTimeResult {
-  const config = getMetricConfig("responseTime") || { thresholds: { min: 2000, ideal: 200, max: 0 } };
-  const { min: maxMs, ideal: idealMs } = config.thresholds;
+  const config = getMetricConfig("responseTime");
+  const { min: maxMs, ideal: idealMs } = config?.thresholds ?? { min: 2000, ideal: 200, max: 0 };
 
   // Calculate adaptive noise floor from first 100ms
   const adaptiveNoiseFloor = calculateAdaptiveNoiseFloor(audioBuffer, sampleRate);
@@ -649,8 +649,8 @@ function analyzePauses(
   sampleRate: number,
   vadMetrics?: VADMetrics
 ): PauseResult {
-  const config = getMetricConfig("pauseManagement") || { thresholds: { min: 0, ideal: 0, max: 2.71 } };
-  const maxRatio = config.thresholds.max;
+  const config = getMetricConfig("pauseManagement");
+  const maxRatio = config?.thresholds?.max ?? 2.71;
 
   let pauseRatio: number;
   let method: string;
