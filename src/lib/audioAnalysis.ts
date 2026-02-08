@@ -894,21 +894,28 @@ export async function analyzeAudioAsync(
   const method = getSpeechRateMethod();
   let deepgramWordCount: number | undefined;
 
+  console.log(`🔍 Speech Rate Method: "${method}", audioBlob: ${audioBlob ? 'PROVIDED' : 'MISSING'}`);
+
   if (method === 'deepgram-stt' && audioBlob) {
     try {
       console.log('🎙️ [analyzeAudioAsync] Using Deepgram STT for speech rate...');
+      console.log(`📦 Audio blob size: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       const transcription = await transcribeAudio(audioBlob);
       deepgramWordCount = transcription.words.length;
       console.log(`✅ [analyzeAudioAsync] Deepgram transcribed ${deepgramWordCount} words`);
+      console.log(`📝 Transcript: "${transcription.transcript.substring(0, 100)}${transcription.transcript.length > 100 ? '...' : ''}"`);
     } catch (error) {
       console.error('❌ [analyzeAudioAsync] Deepgram transcription failed:', error);
       console.warn('⚠️ Falling back to spectral-flux method');
       // deepgramWordCount remains undefined, will fall back to spectral-flux
     }
+  } else if (method === 'deepgram-stt' && !audioBlob) {
+    console.warn('⚠️ Deepgram STT selected but audioBlob not provided - falling back to spectral-flux');
   }
 
   // Use Deepgram word count if available, otherwise use sttWordCount from Web Speech API
   const finalSttWordCount = deepgramWordCount ?? sttWordCount;
+  console.log(`🔢 Final STT word count: ${finalSttWordCount ?? 'undefined'} (deepgram: ${deepgramWordCount ?? 'N/A'}, webSpeech: ${sttWordCount ?? 'N/A'})`);
 
   const speechRate = analyzeSpeechRate(processedBuffer, sampleRate, vadMetrics, finalSttWordCount);
   const acceleration = analyzeAcceleration(processedBuffer, sampleRate, vadMetrics);
