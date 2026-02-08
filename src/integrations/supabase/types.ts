@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          value: Json | null
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          value?: Json | null
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json | null
+        }
+        Relationships: []
+      }
       display_settings: {
         Row: {
           good_threshold: number
@@ -184,6 +205,45 @@ export type Database = {
           english?: string
           id?: string
           vietnamese?: string
+        }
+        Relationships: []
+      }
+      user_metric_settings: {
+        Row: {
+          enabled: boolean
+          id: string
+          ideal_threshold: number
+          max_threshold: number
+          method: string | null
+          metric_id: string
+          min_threshold: number
+          updated_at: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          enabled?: boolean
+          id?: string
+          ideal_threshold?: number
+          max_threshold?: number
+          method?: string | null
+          metric_id: string
+          min_threshold?: number
+          updated_at?: string
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          ideal_threshold?: number
+          max_threshold?: number
+          method?: string | null
+          metric_id?: string
+          min_threshold?: number
+          updated_at?: string
+          user_id?: string
+          weight?: number
         }
         Relationships: []
       }
