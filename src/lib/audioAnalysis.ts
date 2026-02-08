@@ -795,6 +795,25 @@ export async function analyzeAudioAsync(
   sttWordCount?: number,
   audioBlob?: Blob
 ): Promise<AnalysisResult> {
+  // Guard: if VAD detected no speech at all, short-circuit to score 0
+  const hasSpeech = vadMetrics
+    ? vadMetrics.speechRatio > 0.02 && vadMetrics.totalSpeechTime > 200
+    : true; // assume speech if no VAD
+
+  if (!hasSpeech) {
+    console.log('🔇 No speech detected by VAD — returning zero scores');
+    const zeroResult: AnalysisResult = {
+      overallScore: 0,
+      emotionalFeedback: 'poor',
+      volume: { averageDb: -Infinity, score: 0, tag: 'ENERGY' },
+      speechRate: { wordsPerMinute: 0, score: 0, tag: 'FLUENCY', method: getSpeechRateMethod() },
+      acceleration: { isAccelerating: false, segment1Volume: 0, segment2Volume: 0, segment1Rate: 0, segment2Rate: 0, score: 0, tag: 'DYNAMICS' },
+      responseTime: { responseTimeMs: 0, score: 0, tag: 'READINESS' },
+      pauses: { pauseRatio: 1, score: 0, tag: 'FLUIDITY' },
+    };
+    return zeroResult;
+  }
+
   let processedBuffer = audioBuffer;
   let normalizationInfo = undefined;
 
@@ -866,27 +885,6 @@ export async function analyzeAudioAsync(
   const acceleration = analyzeAcceleration(processedBuffer, sampleRate, vadMetrics);
   const responseTime = analyzeResponseTime(processedBuffer, sampleRate);
   const pauses = analyzePauses(processedBuffer, sampleRate, vadMetrics);
-
-  // Check for silence/no speech detected
-  // If VAD detected no speech OR volume is extremely low, return very low score
-  const hasSpeech = vadMetrics && vadMetrics.totalSpeechTime > 0;
-  const hasVolume = volume.averageDb > -60; // -60 dB is essentially silence
-  const isSilent = !hasSpeech || !hasVolume;
-
-  if (isSilent) {
-    console.warn('⚠️ No speech detected in recording (silence or very low volume)');
-    // Return very low scores for all metrics when silent
-    return {
-      overallScore: 0,
-      emotionalFeedback: 'poor',
-      volume: { ...volume, score: 0 },
-      speechRate: { ...speechRate, score: 0 },
-      acceleration: { ...acceleration, score: 0 },
-      responseTime: { ...responseTime, score: 0 },
-      pauses: { ...pauses, score: 0 },
-      normalization: normalizationInfo,
-    };
-  }
 
   const overallScore = calculateOverallScore({
     volume,
