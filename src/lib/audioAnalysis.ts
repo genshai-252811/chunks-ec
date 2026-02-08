@@ -418,8 +418,11 @@ function analyzeSpeechRate(
   const config = getMetricConfig("speechRate");
   const { min, ideal, max } = config?.thresholds ?? { min: 90, ideal: 150, max: 220 };
 
-  // Read admin-configured method (activates previously dead getSpeechRateMethod())
-  const configuredMethod = getSpeechRateMethod();
+  // If sttWordCount was explicitly not provided (e.g. from acceleration sub-analysis),
+  // force spectral-flux — we can't split STT words across audio halves
+  const configuredMethod = sttWordCount === undefined
+    ? "spectral-flux" as SpeechRateMethod
+    : getSpeechRateMethod();
 
   // Use actual speech duration if VAD available, otherwise total duration
   const useVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
