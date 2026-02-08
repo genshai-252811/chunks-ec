@@ -6,6 +6,7 @@ import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
 import { FaceTrackingOverlay } from './FaceTrackingOverlay';
 import { useFaceTracking, FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 import { Button } from '@/components/ui/button';
+import { areVideoMetricsEnabled } from '@/lib/metricUtils';
 
 interface CameraFeedProps {
   isRecording?: boolean;
@@ -15,7 +16,7 @@ interface CameraFeedProps {
   onFaceMetricsUpdate?: (metrics: FaceTrackingMetrics) => void;
 }
 
-export function CameraFeed({ 
+export function CameraFeed({
   isRecording = false,
   audioLevel = 0,
   className,
@@ -29,16 +30,23 @@ export function CameraFeed({
   const [isActive, setIsActive] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 1280, height: 720 });
   const [showMesh, setShowMesh] = useState(true);
+  const [videoMetricsEnabled, setVideoMetricsEnabled] = useState(false);
 
-  const { 
-    isTracking, 
+  const {
+    isTracking,
     isModelLoaded,
-    metrics: faceMetrics, 
+    metrics: faceMetrics,
     currentFace,
-    startTracking, 
-    stopTracking, 
-    processFrame 
+    startTracking,
+    stopTracking,
+    processFrame
   } = useFaceTracking();
+
+  // Check video metrics status on mount
+  useEffect(() => {
+    const enabled = areVideoMetricsEnabled();
+    setVideoMetricsEnabled(enabled);
+  }, []);
 
   // Start camera on mount
   useEffect(() => {
@@ -78,7 +86,7 @@ export function CameraFeed({
         setIsLoading(false);
       } catch (err) {
         if (!mounted) return;
-        
+
         let msg = 'Camera access failed';
         if (err instanceof Error) {
           if (err.name === 'NotAllowedError') msg = 'Please allow camera access';
@@ -101,14 +109,14 @@ export function CameraFeed({
     };
   }, []);
 
-  // Start/stop face tracking when recording state changes
+  // Start/stop face tracking when recording state changes (only if video metrics enabled)
   useEffect(() => {
-    if (isRecording && isActive) {
+    if (isRecording && isActive && videoMetricsEnabled) {
       startTracking();
     } else if (!isRecording && isTracking) {
       stopTracking();
     }
-  }, [isRecording, isActive, isTracking, startTracking, stopTracking]);
+  }, [isRecording, isActive, isTracking, videoMetricsEnabled, startTracking, stopTracking]);
 
   // Process video frames for face tracking
   useEffect(() => {
@@ -164,7 +172,7 @@ export function CameraFeed({
       />
 
       {/* Face Tracking Overlay */}
-      {showMesh && (
+      {videoMetricsEnabled && showMesh && (
         <FaceTrackingOverlay
           face={currentFace}
           isTracking={isTracking}
@@ -176,7 +184,7 @@ export function CameraFeed({
 
       {/* Mesh Toggle Button */}
       <AnimatePresence>
-        {isActive && (
+        {videoMetricsEnabled && isActive && (
           <motion.div
             className="absolute bottom-4 right-4 z-30"
             initial={{ opacity: 0, scale: 0.8 }}
@@ -203,14 +211,14 @@ export function CameraFeed({
       </AnimatePresence>
 
       {/* Floating Energy Indicator above head */}
-      <FloatingEnergyIndicator 
-        audioLevel={audioLevel} 
-        isActive={isRecording && isActive} 
+      <FloatingEnergyIndicator
+        audioLevel={audioLevel}
+        isActive={isRecording && isActive}
       />
 
       {/* Eye Contact Indicator */}
       <AnimatePresence>
-        {isRecording && isActive && (
+        {videoMetricsEnabled && isRecording && isActive && (
           <motion.div
             className="absolute top-4 right-4 flex items-center gap-2 bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-full z-30"
             initial={{ opacity: 0, x: 20 }}
@@ -234,7 +242,7 @@ export function CameraFeed({
 
       {/* Face Tracking Stats (during recording) */}
       <AnimatePresence>
-        {isRecording && isActive && fullscreen && (
+        {videoMetricsEnabled && isRecording && isActive && fullscreen && (
           <motion.div
             className="absolute bottom-24 left-4 flex flex-col gap-1 bg-background/60 backdrop-blur-sm px-3 py-2 rounded-lg z-30"
             initial={{ opacity: 0, y: 20 }}

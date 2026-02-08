@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
+import { areVideoMetricsEnabled } from '@/lib/metricUtils';
 
 // Thresholds
 const BLINK_EAR_THRESHOLD = 0.21;
@@ -44,7 +45,7 @@ export function useFaceTracking() {
   const handMovementScoresRef = useRef<number[]>([]);
   const startTimeRef = useRef<number | null>(null);
   const isInitializingRef = useRef(false);
-  
+
   const [isTracking, setIsTracking] = useState(false);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,35 +63,35 @@ export function useFaceTracking() {
   // Calculate Eye Aspect Ratio for blink detection
   const calculateEAR = useCallback((keypoints: Array<{ x: number; y: number }>, eyeIndices: number[]) => {
     if (!keypoints || eyeIndices.length < 6) return 1;
-    
+
     const points = eyeIndices.map(i => keypoints[i]).filter(Boolean);
     if (points.length < 6) return 1;
-    
+
     const [p1, p2, p3, p4, p5, p6] = points;
-    
+
     // Vertical distances
     const v1 = Math.sqrt(Math.pow(p2.x - p6.x, 2) + Math.pow(p2.y - p6.y, 2));
     const v2 = Math.sqrt(Math.pow(p3.x - p5.x, 2) + Math.pow(p3.y - p5.y, 2));
     // Horizontal distance
     const h = Math.sqrt(Math.pow(p1.x - p4.x, 2) + Math.pow(p1.y - p4.y, 2));
-    
+
     return h > 0 ? (v1 + v2) / (2.0 * h) : 1;
   }, []);
 
   // Check if looking at camera
   const checkEyeContact = useCallback((keypoints: Array<{ x: number; y: number }>) => {
     if (!keypoints || keypoints.length < 474) return false;
-    
+
     const leftIris = keypoints[LEFT_IRIS_CENTER];
     const rightIris = keypoints[RIGHT_IRIS_CENTER];
     const leftEye = keypoints[LEFT_EYE_INDICES[0]];
     const rightEye = keypoints[RIGHT_EYE_INDICES[0]];
-    
+
     if (!leftIris || !rightIris || !leftEye || !rightEye) return false;
-    
+
     const leftOffset = Math.abs(leftIris.x - leftEye.x);
     const rightOffset = Math.abs(rightIris.x - rightEye.x);
-    
+
     // Allow some margin for natural eye movement
     return leftOffset < 0.02 && rightOffset < 0.02;
   }, []);
@@ -98,33 +99,41 @@ export function useFaceTracking() {
   // Calculate hand movement from positions
   const calculateHandMovement = useCallback((positions: { x: number; y: number }[]) => {
     if (positions.length < 2) return 0;
-    
+
     let totalMovement = 0;
     for (let i = 1; i < positions.length; i++) {
       const dx = positions[i].x - positions[i - 1].x;
       const dy = positions[i].y - positions[i - 1].y;
       totalMovement += Math.sqrt(dx * dx + dy * dy);
     }
-    
+
     // Normalize to 0-100 scale (more movement = higher score)
     const avgMovement = totalMovement / (positions.length - 1);
     return Math.min(100, avgMovement * 2000); // Scale factor for sensitivity
   }, []);
 
   // Initialize TensorFlow.js and detectors
-  const initialize = useCallback(async () => {
+  const initialize = useCallback(async (shouldInitialize: boolean = true) => {
+    // Skip initialization if video metrics are disabled
+    if (!shouldInitialize) {
+      console.log('⏭️ [useFaceTracking] Skipping MediaPipe initialization - video metrics disabled');
+      setIsModelLoaded(false);
+      setError(null);
+      return;
+    }
+
     if ((faceDetectorRef.current && handDetectorRef.current) || isInitializingRef.current) return;
-    
+
     isInitializingRef.current = true;
-    
+
     try {
-      console.log('Initializing TensorFlow.js...');
+      console.log('🚀 [useFaceTracking] Initializing TensorFlow.js...');
       await tf.ready();
       await tf.setBackend('webgl');
-      console.log('TensorFlow.js backend:', tf.getBackend());
-      
+      console.log('✅ [useFaceTracking] TensorFlow.js backend:', tf.getBackend());
+
       // Load face detection model
-      console.log('Loading face landmarks model...');
+      console.log('📦 [useFaceTracking] Loading face landmarks model...');
       const faceModel = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
       const faceDetector = await faceLandmarksDetection.createDetector(faceModel, {
         runtime: 'tfjs',
@@ -132,9 +141,9 @@ export function useFaceTracking() {
         maxFaces: 1,
       });
       faceDetectorRef.current = faceDetector;
-      
+
       // Load hand detection model
-      console.log('Loading hand pose model...');
+      console.log('📦 [useFaceTracking] Loading hand pose model...');
       const handModel = handPoseDetection.SupportedModels.MediaPipeHands;
       const handDetector = await handPoseDetection.createDetector(handModel, {
         runtime: 'tfjs',
@@ -142,12 +151,12 @@ export function useFaceTracking() {
         maxHands: 2,
       });
       handDetectorRef.current = handDetector;
-      
+
       setIsModelLoaded(true);
       setError(null);
-      console.log('Face and hand tracking models loaded successfully!');
+      console.log('✅ [useFaceTracking] Face and hand tracking models loaded successfully!');
     } catch (err) {
-      console.error('Failed to initialize tracking:', err);
+      console.error('❌ [useFaceTracking] Failed to initialize tracking:', err);
       setError('Failed to load detection models');
       setIsModelLoaded(false);
     } finally {
@@ -160,7 +169,7 @@ export function useFaceTracking() {
     if (!isModelLoaded) {
       await initialize();
     }
-    
+
     frameCountRef.current = 0;
     eyeContactFramesRef.current = 0;
     blinkCountRef.current = 0;
@@ -168,7 +177,7 @@ export function useFaceTracking() {
     handPositionsRef.current = [];
     handMovementScoresRef.current = [];
     startTimeRef.current = Date.now();
-    
+
     setIsTracking(true);
     setCurrentFace(null);
     setCurrentHands([]);
@@ -191,19 +200,19 @@ export function useFaceTracking() {
   // Process a video frame
   const processFrame = useCallback(async (videoElement: HTMLVideoElement) => {
     if (!isTracking) return;
-    
+
     const videoWidth = videoElement.videoWidth;
     const videoHeight = videoElement.videoHeight;
-    
+
     try {
       // Process face detection
       if (faceDetectorRef.current) {
         const faces = await faceDetectorRef.current.estimateFaces(videoElement);
-        
+
         if (faces.length > 0) {
           const face = faces[0];
           const keypoints = face.keypoints;
-          
+
           setCurrentFace({
             keypoints: keypoints as Array<{ x: number; y: number; z?: number; name?: string }>,
             box: face.box ? {
@@ -213,7 +222,7 @@ export function useFaceTracking() {
               yMax: face.box.yMax,
             } : undefined,
           });
-          
+
           frameCountRef.current++;
 
           // Normalize keypoints
@@ -233,7 +242,7 @@ export function useFaceTracking() {
           const rightEAR = calculateEAR(normalizedKeypoints, RIGHT_EYE_INDICES);
           const avgEAR = (leftEAR + rightEAR) / 2;
           const isBlinking = avgEAR < BLINK_EAR_THRESHOLD;
-          
+
           if (isBlinking && !lastBlinkStateRef.current) {
             blinkCountRef.current++;
           }
@@ -246,13 +255,13 @@ export function useFaceTracking() {
       // Process hand detection
       if (handDetectorRef.current) {
         const hands = await handDetectorRef.current.estimateHands(videoElement);
-        
+
         if (hands.length > 0) {
           setCurrentHands(hands.map(hand => ({
             keypoints: hand.keypoints as Array<{ x: number; y: number; z?: number; name?: string }>,
             handedness: hand.handedness,
           })));
-          
+
           // Track wrist position for movement calculation
           const wrist = hands[0].keypoints[0]; // Wrist is keypoint 0
           if (wrist) {
@@ -261,12 +270,12 @@ export function useFaceTracking() {
               y: wrist.y / videoHeight,
             };
             handPositionsRef.current.push(normalizedPos);
-            
+
             // Keep last 30 frames
             if (handPositionsRef.current.length > 30) {
               handPositionsRef.current.shift();
             }
-            
+
             // Calculate current movement score
             const movementScore = calculateHandMovement(handPositionsRef.current);
             handMovementScoresRef.current.push(movementScore);
@@ -277,7 +286,7 @@ export function useFaceTracking() {
       }
 
       // Calculate metrics
-      const eyeContactScore = frameCountRef.current > 0 
+      const eyeContactScore = frameCountRef.current > 0
         ? Math.round((eyeContactFramesRef.current / frameCountRef.current) * 100)
         : 0;
 
@@ -291,9 +300,9 @@ export function useFaceTracking() {
       const blinkRate = elapsedMinutes > 0.1 ? Math.round(blinkCountRef.current / elapsedMinutes) : 0;
 
       const noseTip = currentFace?.keypoints[NOSE_TIP];
-      const headPos = noseTip ? { 
-        x: noseTip.x / videoWidth, 
-        y: noseTip.y / videoHeight 
+      const headPos = noseTip ? {
+        x: noseTip.x / videoWidth,
+        y: noseTip.y / videoHeight
       } : null;
 
       setMetrics({
@@ -314,10 +323,11 @@ export function useFaceTracking() {
     return metrics;
   }, [metrics]);
 
-  // Initialize on mount
+  // Initialize on mount only if video metrics are enabled
   useEffect(() => {
-    initialize();
-    
+    const videoMetricsEnabled = areVideoMetricsEnabled();
+    initialize(videoMetricsEnabled);
+
     return () => {
       if (faceDetectorRef.current) {
         faceDetectorRef.current.dispose?.();
