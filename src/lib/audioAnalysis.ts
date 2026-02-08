@@ -717,23 +717,38 @@ function calculateOverallScore(results: {
   };
 
   try {
-    // Load from new metric settings if available
-    const metricSettingsStr = localStorage.getItem('audio_metric_settings');
-    if (metricSettingsStr) {
-      const metricSettings = JSON.parse(metricSettingsStr) as Record<string, any>;
-      // Convert to normalized weights (0-1)
-      const enabledTotal: number = (Object.values(metricSettings) as any[])
+    // Load from metricConfig (saved by admin panel)
+    const metricConfigStr = localStorage.getItem('metricConfig');
+    console.log('🔍 Loading weights from localStorage (metricConfig):', metricConfigStr ? 'FOUND' : 'NOT FOUND');
+
+    if (metricConfigStr) {
+      const metricConfigArray = JSON.parse(metricConfigStr) as any[];
+      console.log('📋 Metric config from localStorage:', metricConfigArray);
+
+      // Convert array to object for easier access
+      const metricSettings: Record<string, any> = {};
+      metricConfigArray.forEach((config: any) => {
+        metricSettings[config.id] = config;
+      });
+
+      // Calculate total weight from enabled metrics
+      const enabledTotal: number = metricConfigArray
         .filter((config) => !!config?.enabled)
         .reduce((sum, config) => sum + (Number(config?.weight) || 0), 0);
 
+      console.log('📊 Enabled total weight:', enabledTotal);
+
       if (enabledTotal > 0) {
         weights = {
-          volume: metricSettings.volume.enabled ? metricSettings.volume.weight / 100 : 0,
-          speechRate: metricSettings.speechRate.enabled ? metricSettings.speechRate.weight / 100 : 0,
-          acceleration: metricSettings.acceleration.enabled ? metricSettings.acceleration.weight / 100 : 0,
-          responseTime: metricSettings.responseTime.enabled ? metricSettings.responseTime.weight / 100 : 0,
-          pauses: metricSettings.pauses.enabled ? metricSettings.pauses.weight / 100 : 0,
+          volume: metricSettings.volume?.enabled ? metricSettings.volume.weight / enabledTotal : 0,
+          speechRate: metricSettings.speechRate?.enabled ? metricSettings.speechRate.weight / enabledTotal : 0,
+          acceleration: metricSettings.acceleration?.enabled ? metricSettings.acceleration.weight / enabledTotal : 0,
+          responseTime: metricSettings.responseTime?.enabled ? metricSettings.responseTime.weight / enabledTotal : 0,
+          pauses: (metricSettings.pauses || metricSettings.pauseManagement)?.enabled
+            ? ((metricSettings.pauses || metricSettings.pauseManagement).weight / enabledTotal)
+            : 0,
         };
+        console.log('✅ Using weights from localStorage (normalized):', weights);
       }
     } else {
       // Fall back to old metricConfig from database if new settings not available
@@ -777,7 +792,19 @@ function calculateOverallScore(results: {
     results.responseTime.score * weights.responseTime +
     results.pauses.score * weights.pauses;
 
-  return Math.round(weightedSum);
+  const finalScore = Math.round(weightedSum);
+
+  // Debug logging to understand score breakdown
+  console.log('📊 SCORE BREAKDOWN:');
+  console.log(`  Volume: ${results.volume.score} × ${(weights.volume * 100).toFixed(0)}% = ${(results.volume.score * weights.volume).toFixed(1)} points`);
+  console.log(`  Speech Rate: ${results.speechRate.score} × ${(weights.speechRate * 100).toFixed(0)}% = ${(results.speechRate.score * weights.speechRate).toFixed(1)} points`);
+  console.log(`  Acceleration: ${results.acceleration.score} × ${(weights.acceleration * 100).toFixed(0)}% = ${(results.acceleration.score * weights.acceleration).toFixed(1)} points`);
+  console.log(`  Response Time: ${results.responseTime.score} × ${(weights.responseTime * 100).toFixed(0)}% = ${(results.responseTime.score * weights.responseTime).toFixed(1)} points`);
+  console.log(`  Pauses: ${results.pauses.score} × ${(weights.pauses * 100).toFixed(0)}% = ${(results.pauses.score * weights.pauses).toFixed(1)} points`);
+  console.log(`  ─────────────────────────────────────────`);
+  console.log(`  TOTAL: ${finalScore}/100`);
+
+  return finalScore;
 }
 
 function getEmotionalFeedback(score: number): "excellent" | "good" | "poor" {
