@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
 import { MetricWeightDistribution } from '@/components/MetricWeightDistribution';
+import { CalibrationWizard } from '@/components/CalibrationWizard';
 import { rebalanceWeights } from '@/lib/metricsUtils';
 
 const METRIC_LABELS: Record<string, { name: string; description: string; unit: string; color: string; category: 'audio' | 'video' }> = {
@@ -287,6 +288,9 @@ export default function Settings() {
                 Actually, let's keep the main actions near the visualization like Admin panel 
             */}
         </div>
+
+        {/* Device Calibration */}
+        <CalibrationWizard />
 
         {/* Weight Distribution Visualization */}
         <MetricWeightDistribution metrics={metrics} metricLabels={METRIC_LABELS} />
