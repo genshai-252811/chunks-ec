@@ -13,6 +13,7 @@ import { useSentences } from '@/hooks/useSentences';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 import { usePracticeResults } from '@/hooks/usePracticeResults';
+import { useMetricSettings } from '@/hooks/useMetricSettings';
 import { analyzeAudioAsync, AnalysisResult } from '@/lib/audioAnalysis';
 import { FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 import { Button } from '@/components/ui/button';
@@ -25,8 +26,12 @@ import {
 
 type AppState = 'idle' | 'recording' | 'processing' | 'results';
 
-const Index = () => {
+export default function Index() {
   const [appState, setAppState] = useState<AppState>('idle');
+
+  // Sync metric settings on mount
+  useMetricSettings();
+
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [speechProbability, setSpeechProbability] = useState(0);
@@ -381,4 +386,3 @@ const Index = () => {
     </AnimatePresence>
   </div>;
 };
-export default Index;

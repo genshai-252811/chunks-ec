@@ -65,10 +65,22 @@ export const MetricsTab = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [allowUserCustomization, setAllowUserCustomization] = useState(false);
 
   const fetchMetrics = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Fetch global app settings
+      const { data: appSettings, error: appSettingsError } = await (supabase as any)
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'allow_user_metrics_customization')
+        .single();
+
+      if (!appSettingsError && appSettings) {
+        setAllowUserCustomization(!!appSettings.value);
+      }
+
       const { data, error } = await supabase
         .from('metric_settings')
         .select('*');
@@ -220,13 +232,28 @@ export const MetricsTab = () => {
       localStorage.setItem('metricConfig', JSON.stringify(localConfig));
       console.log('✅ [MetricsTab] Saved metricConfig to localStorage');
 
-      toast({ title: 'Success', description: 'Metric settings saved.' });
+      // Save global app setting
+      const { error: appSettingsError } = await (supabase as any)
+        .from('app_settings')
+        .upsert({
+          key: 'allow_user_metrics_customization',
+          value: allowUserCustomization
+        }, { onConflict: 'key' });
+
+      if (appSettingsError) throw appSettingsError;
+
+      toast({ title: 'Success', description: 'Settings saved successfully.' });
       await fetchMetrics();
     } catch (err: any) {
-      console.error('Failed to save metrics:', err);
-      toast({ title: 'Error', description: err.message || 'Failed to save settings.', variant: 'destructive' });
+      console.error('Error saving metrics:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error saving settings',
+        description: err.message,
+      });
     } finally {
       setIsSaving(false);
+      setHasChanges(false);
     }
   };
 
@@ -236,7 +263,7 @@ export const MetricsTab = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -244,6 +271,52 @@ export const MetricsTab = () => {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Global Settings</CardTitle>
+          <CardDescription>Configure system-wide behavior for metrics.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between space-x-2">
+            <div className="space-y-1">
+              <Label htmlFor="allow-customization">Allow User Customization</Label>
+              <p className="text-sm text-muted-foreground">
+                If enabled, users can override these default settings in their own profile.
+                If disabled, all users will use the settings configured here.
+              </p>
+            </div>
+            <Switch
+              id="allow-customization"
+              checked={allowUserCustomization}
+              onCheckedChange={(checked) => {
+                setAllowUserCustomization(checked);
+                setHasChanges(true);
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={!hasChanges || isSaving}
+          className="w-full sm:w-auto"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Changes
+            </>
+          )}
+        </Button>
+      </div>
+
       {/* Weight Distribution Visual */}
       <Card>
         <CardHeader className="pb-3">
