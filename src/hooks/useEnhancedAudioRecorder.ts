@@ -214,6 +214,7 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
         onSpeechEnd: (audio: Float32Array) => {
           console.log('VAD: Speech ended');
           const endTime = Date.now();
+          speechStartTimeRef.current = 0; // Reset so flush doesn't double-count
           const startTime = speechStartTimeRef.current;
           const duration = endTime - startTime;
           
@@ -409,8 +410,36 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
         sttRef.current = null;
       }
 
-      // Stop VAD
+      // Stop VAD — flush any in-progress speech segment before destroying
       if (vadRef.current) {
+        // If VAD detected speech start but hasn't fired onSpeechEnd yet,
+        // manually close the segment so it isn't lost
+        if (speechStartTimeRef.current > 0) {
+          const endTime = Date.now();
+          const startTime = speechStartTimeRef.current;
+          const duration = endTime - startTime;
+
+          // Only add if it looks like real speech (>100ms)
+          if (duration > 100) {
+            if (lastSpeechEndRef.current > 0) {
+              const silenceDuration = startTime - lastSpeechEndRef.current;
+              totalSilenceTimeRef.current += silenceDuration;
+            }
+            lastSpeechEndRef.current = endTime;
+
+            const segment: SpeechSegment = {
+              start: startTime - sessionStartTimeRef.current,
+              end: endTime - sessionStartTimeRef.current,
+              duration,
+            };
+
+            speechSegmentsRef.current.push(segment);
+            totalSpeechTimeRef.current += duration;
+            console.log(`🎤 VAD: Flushed in-progress speech segment (${duration}ms)`);
+          }
+          speechStartTimeRef.current = 0;
+        }
+
         vadRef.current.pause();
         vadRef.current.destroy();
         vadRef.current = null;
