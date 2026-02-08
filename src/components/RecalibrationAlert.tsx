@@ -8,7 +8,7 @@ interface RecalibrationAlertProps {
   deviceId?: string | null;
 }
 
-export function RecalibrationAlert({ deviceId }: RecalibrationAlertProps) {
+export const RecalibrationAlert = ({ deviceId }: RecalibrationAlertProps) => {
   if (!deviceId) return null;
 
   const status = getRecalibrationStatus(deviceId);
@@ -47,4 +47,4 @@ export function RecalibrationAlert({ deviceId }: RecalibrationAlertProps) {
       </div>
     </Alert>
   );
-}
+};

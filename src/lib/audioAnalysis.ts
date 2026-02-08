@@ -562,8 +562,10 @@ function analyzeAcceleration(
   const vol1 = analyzeVolume(segment1);
   const vol2 = analyzeVolume(segment2);
 
-  const rate1 = analyzeSpeechRate(segment1, sampleRate, vadSegment1);
-  const rate2 = analyzeSpeechRate(segment2, sampleRate, vadSegment2);
+  // For acceleration sub-analysis, don't pass sttWordCount (can't split words per half)
+  // This forces spectral-flux fallback which is appropriate for comparing halves
+  const rate1 = analyzeSpeechRate(segment1, sampleRate, vadSegment1, undefined);
+  const rate2 = analyzeSpeechRate(segment2, sampleRate, vadSegment2, undefined);
 
   // Check if accelerating (volume or rate increasing)
   const volumeIncrease = vol2.averageDb - vol1.averageDb;
