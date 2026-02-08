@@ -424,11 +424,24 @@ function analyzeSpeechRate(
     ? "spectral-flux" as SpeechRateMethod
     : getSpeechRateMethod();
 
-  // Use actual speech duration if VAD available, otherwise total duration
+  // Calculate duration using hybrid approach:
+  // - Pure speech-only duration gives inflated WPM (300 WPM for short clips)
+  // - Pure total duration is too slow
+  // - Hybrid: totalDuration - (silenceTime / 2) = accounts for natural pauses but not all silence
+  const totalDuration = audioBuffer.length / sampleRate;
   const useVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
-  const durationSeconds = useVAD
-    ? vadMetrics.totalSpeechTime / 1000
-    : audioBuffer.length / sampleRate;
+
+  let durationSeconds: number;
+  if (useVAD) {
+    const speechDuration = vadMetrics.totalSpeechTime / 1000;
+    const silenceTime = totalDuration - speechDuration;
+    // Hybrid: subtract half of silence time from total
+    durationSeconds = totalDuration - (silenceTime / 2);
+    console.log(`⏱️ Duration (hybrid): total=${totalDuration.toFixed(2)}s, speech=${speechDuration.toFixed(2)}s, silence=${silenceTime.toFixed(2)}s, adjusted=${durationSeconds.toFixed(2)}s`);
+  } else {
+    durationSeconds = totalDuration;
+    console.log(`⏱️ Duration (no VAD): ${durationSeconds.toFixed(2)}s`);
+  }
 
   let wpm = 0;
   let actualMethod: SpeechRateMethod = configuredMethod;
