@@ -2,6 +2,8 @@
 // NOTE: This file contains the CORE ANALYSIS LOGIC that must NOT be changed
 
 import { calibrateAndNormalize, calculateNoiseFloor, getCalibrationProfile, TARGET_LUFS } from './lufsNormalization';
+import { VADMetrics, analyzeVAD } from './vad';
+import { transcribeAudio, calculateWPMFromTranscription } from './deepgramService';
 
 // VAD Metrics interface (from useEnhancedAudioRecorder)
 export interface SpeechSegment {
@@ -20,7 +22,7 @@ export interface VADMetrics {
 }
 
 // Types for speech rate method
-export type SpeechRateMethod = "energy-peaks" | "vad-enhanced" | "deepgram-stt" | "zero-crossing-rate";
+export type SpeechRateMethod = "energy-peaks" | "vad-enhanced" | "spectral-flux" | "web-speech-api" | "deepgram-stt";
 
 // Config interface matching admin settings
 export interface MetricConfig {
@@ -48,7 +50,7 @@ function getConfig(): MetricConfig[] {
   // Default config (matches AdminSettings defaults)
   return [
     { id: "volume", weight: 40, thresholds: { min: -35, ideal: -15, max: 0 } },
-    { id: "speechRate", weight: 40, thresholds: { min: 90, ideal: 150, max: 220 }, method: "energy-peaks" },
+    { id: "speechRate", weight: 40, thresholds: { min: 90, ideal: 150, max: 220 }, method: "spectral-flux" },
     { id: "acceleration", weight: 5, thresholds: { min: 0, ideal: 50, max: 100 } },
     { id: "responseTime", weight: 5, thresholds: { min: 2000, ideal: 200, max: 0 } },
     { id: "pauseManagement", weight: 10, thresholds: { min: 0, ideal: 0, max: 2.71 } },
@@ -61,7 +63,7 @@ function getMetricConfig(id: string): MetricConfig | undefined {
 
 function getSpeechRateMethod(): SpeechRateMethod {
   const config = getMetricConfig("speechRate");
-  return config?.method || "energy-peaks";
+  return config?.method || "spectral-flux";
 }
 
 export interface VolumeResult {
@@ -282,55 +284,231 @@ function detectSyllablesWithVAD(
   return peaks;
 }
 
-function analyzeSpeechRate(
+/**
+ * Spectral Flux syllable detection.
+ * Computes Short-Time Fourier Transform on raw PCM,
+ * calculates onset flux, and counts syllable peaks.
+ * No external dependencies — pure math on Float32Array.
+ *
+ * Much more accurate than energy peaks because it detects
+ * spectral changes (formant transitions) rather than just amplitude.
+ */
+function detectSyllablesWithSpectralFlux(
   audioBuffer: Float32Array,
   sampleRate: number,
   vadMetrics?: VADMetrics
+): number {
+  const frameSizeSamples = Math.floor(sampleRate * 0.02); // 20ms frames
+  const hopSize = Math.floor(frameSizeSamples / 2);       // 50% overlap = 10ms hop
+  const fftBins = 256; // 256 bins covers ~0-8kHz at 44.1kHz (sufficient for speech)
+
+  // Pre-compute Hann window
+  const hannWindow = new Float32Array(frameSizeSamples);
+  for (let i = 0; i < frameSizeSamples; i++) {
+    hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (frameSizeSamples - 1)));
+  }
+
+  // Pre-compute cosine/sine tables for DFT (avoids recalculating trig per frame)
+  const cosTable = new Float32Array(fftBins * frameSizeSamples);
+  const sinTable = new Float32Array(fftBins * frameSizeSamples);
+  for (let k = 0; k < fftBins; k++) {
+    const freqRatio = (2 * Math.PI * k) / frameSizeSamples;
+    for (let n = 0; n < frameSizeSamples; n++) {
+      cosTable[k * frameSizeSamples + n] = Math.cos(freqRatio * n);
+      sinTable[k * frameSizeSamples + n] = Math.sin(freqRatio * n);
+    }
+  }
+
+  // Compute magnitude spectrum for a windowed frame using pre-computed tables
+  function computeMagnitudeSpectrum(frame: Float32Array): Float32Array {
+    const magnitudes = new Float32Array(fftBins);
+    const N = frame.length;
+    for (let k = 0; k < fftBins; k++) {
+      let real = 0;
+      let imag = 0;
+      const offset = k * frameSizeSamples;
+      for (let n = 0; n < N; n++) {
+        real += frame[n] * cosTable[offset + n];
+        imag -= frame[n] * sinTable[offset + n];
+      }
+      magnitudes[k] = Math.sqrt(real * real + imag * imag);
+    }
+    return magnitudes;
+  }
+
+  // VAD speech region lookup
+  const hasVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
+  const isWithinSpeech = (timeMs: number): boolean => {
+    if (!hasVAD) return true;
+    return vadMetrics!.speechSegments.some(
+      seg => timeMs >= seg.start && timeMs <= seg.end
+    );
+  };
+
+  // Compute spectral flux for each frame
+  let prevSpectrum = new Float32Array(fftBins);
+  const fluxValues: { flux: number; timeMs: number }[] = [];
+  const windowed = new Float32Array(frameSizeSamples);
+
+  for (let i = 0; i <= audioBuffer.length - frameSizeSamples; i += hopSize) {
+    // Apply Hann window
+    for (let j = 0; j < frameSizeSamples; j++) {
+      windowed[j] = audioBuffer[i + j] * hannWindow[j];
+    }
+
+    const spectrum = computeMagnitudeSpectrum(windowed);
+
+    // Half-wave rectified spectral flux (only positive changes = onsets)
+    let flux = 0;
+    for (let k = 0; k < fftBins; k++) {
+      const diff = spectrum[k] - prevSpectrum[k];
+      if (diff > 0) flux += diff;
+    }
+
+    const timeMs = (i / sampleRate) * 1000;
+    fluxValues.push({ flux, timeMs });
+    prevSpectrum = spectrum;
+  }
+
+  if (fluxValues.length === 0) return 0;
+
+  // Filter to speech regions if VAD available
+  const speechFlux = hasVAD
+    ? fluxValues.filter(f => isWithinSpeech(f.timeMs))
+    : fluxValues;
+
+  if (speechFlux.length < 3) return Math.max(1, speechFlux.length);
+
+  // Adaptive threshold: median * 1.5
+  const sortedFlux = [...speechFlux.map(f => f.flux)].sort((a, b) => a - b);
+  const median = sortedFlux[Math.floor(sortedFlux.length / 2)];
+  const threshold = Math.max(
+    median * 1.5,
+    sortedFlux[Math.floor(sortedFlux.length * 0.75)] * 0.5
+  );
+
+  // Peak detection with minimum 40ms spacing (4 frames at 10ms hop)
+  let peaks = 0;
+  let lastPeakIdx = -5;
+
+  for (let i = 1; i < speechFlux.length - 1; i++) {
+    if (
+      speechFlux[i].flux > threshold &&
+      speechFlux[i].flux > speechFlux[i - 1].flux &&
+      speechFlux[i].flux > speechFlux[i + 1].flux &&
+      i - lastPeakIdx > 4
+    ) {
+      peaks++;
+      lastPeakIdx = i;
+    }
+  }
+
+  console.log(`🔬 Spectral Flux: ${peaks} syllables from ${speechFlux.length} speech frames (threshold=${threshold.toFixed(2)})`);
+  return Math.max(1, peaks);
+}
+
+function analyzeSpeechRate(
+  audioBuffer: Float32Array,
+  sampleRate: number,
+  vadMetrics?: VADMetrics,
+  sttWordCount?: number
 ): SpeechRateResult {
   const config = getMetricConfig("speechRate") || { thresholds: { min: 90, ideal: 150, max: 220 } };
   const { min, ideal, max } = config.thresholds;
 
-  // Determine method based on VAD availability
-  const useVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
-  const method: SpeechRateMethod = useVAD ? "vad-enhanced" : "energy-peaks";
+  // Read admin-configured method (activates previously dead getSpeechRateMethod())
+  const configuredMethod = getSpeechRateMethod();
 
   // Use actual speech duration if VAD available, otherwise total duration
+  const useVAD = vadMetrics && vadMetrics.speechSegments && vadMetrics.speechSegments.length > 0;
   const durationSeconds = useVAD
-    ? vadMetrics.totalSpeechTime / 1000  // Only count actual speech time
+    ? vadMetrics.totalSpeechTime / 1000
     : audioBuffer.length / sampleRate;
 
-  // Use VAD-enhanced syllable detection if available
-  const syllables = useVAD
-    ? detectSyllablesWithVAD(audioBuffer, sampleRate, vadMetrics)
-    : detectSyllablesFromPeaks(audioBuffer, sampleRate);
+  let wpm = 0;
+  let actualMethod: SpeechRateMethod = configuredMethod;
 
-  // Estimate WPM (assume ~1.5 syllables per word on average)
-  const words = syllables / 1.5;
-  const wpm = durationSeconds > 0 ? Math.round((words / durationSeconds) * 60) : 0;
-
-  // Score calculation
-  let score = 0;
-  if (wpm >= min && wpm <= max) {
-    if (wpm <= ideal) {
-      score = 70 + ((wpm - min) / (ideal - min)) * 30;
-    } else {
-      score = 100 - ((wpm - ideal) / (max - ideal)) * 30;
+  switch (configuredMethod) {
+    case "deepgram-stt": {
+      if (sttWordCount != null && sttWordCount > 0) {
+        // Direct word count from Deepgram transcription — most accurate
+        wpm = durationSeconds > 0 ? Math.round((sttWordCount / durationSeconds) * 60) : 0;
+        actualMethod = "deepgram-stt";
+        console.log(`🎙️ Speech Rate (Deepgram STT): ${sttWordCount} words, ${wpm} WPM over ${durationSeconds.toFixed(2)}s`);
+      } else {
+        // Fallback: Deepgram failed or unavailable → use spectral flux
+        console.warn('⚠️ Deepgram STT produced no words, falling back to spectral-flux');
+        const syllables = detectSyllablesWithSpectralFlux(audioBuffer, sampleRate, vadMetrics);
+        wpm = durationSeconds > 0 ? Math.round((syllables / 1.5 / durationSeconds) * 60) : 0;
+        actualMethod = "spectral-flux";
+      }
+      break;
     }
-  } else if (wpm < min) {
-    score = Math.max(0, 70 * (wpm / min));
-  } else {
-    score = Math.max(0, 70 * (1 - (wpm - max) / 50));
+
+    case "web-speech-api": {
+      if (sttWordCount != null && sttWordCount > 0) {
+        // Direct word count from browser STT — most accurate
+        wpm = durationSeconds > 0 ? Math.round((sttWordCount / durationSeconds) * 60) : 0;
+        actualMethod = "web-speech-api";
+        console.log(`🗣️ Speech Rate (Web Speech API): ${sttWordCount} words, ${wpm} WPM over ${durationSeconds.toFixed(2)}s`);
+      } else {
+        // Fallback: STT failed or unavailable → use spectral flux
+        console.warn('⚠️ Web Speech API produced no words, falling back to spectral-flux');
+        const syllables = detectSyllablesWithSpectralFlux(audioBuffer, sampleRate, vadMetrics);
+        wpm = durationSeconds > 0 ? Math.round((syllables / 1.5 / durationSeconds) * 60) : 0;
+        actualMethod = "spectral-flux";
+      }
+      break;
+    }
+
+
+    case "spectral-flux": {
+      const syllables = detectSyllablesWithSpectralFlux(audioBuffer, sampleRate, vadMetrics);
+      wpm = durationSeconds > 0 ? Math.round((syllables / 1.5 / durationSeconds) * 60) : 0;
+      actualMethod = "spectral-flux";
+      console.log(`🔬 Speech Rate (Spectral Flux): ${wpm} WPM over ${durationSeconds.toFixed(2)}s`);
+      break;
+    }
+
+    case "energy-peaks":
+    default: {
+      // Original behavior: use VAD-enhanced if available, otherwise basic energy peaks
+      const syllables = useVAD
+        ? detectSyllablesWithVAD(audioBuffer, sampleRate, vadMetrics)
+        : detectSyllablesFromPeaks(audioBuffer, sampleRate);
+      wpm = durationSeconds > 0 ? Math.round((syllables / 1.5 / durationSeconds) * 60) : 0;
+      actualMethod = useVAD ? "vad-enhanced" : "energy-peaks";
+      if (useVAD) {
+        console.log(`📊 Speech Rate (VAD-enhanced): ${wpm} WPM over ${durationSeconds.toFixed(2)}s`);
+      }
+      break;
+    }
   }
 
-  if (useVAD) {
-    console.log(`📊 Speech Rate (VAD-enhanced): ${wpm} WPM over ${durationSeconds.toFixed(2)}s of speech`);
+  // Score calculation for Speech Rate (energy-based):
+  // Faster = more energy = better score. Only slow speech is penalized.
+  // below min → 0 (too slow, no energy)
+  // min → ideal → linear 0 → 100
+  // ideal and above → always 100 (fast speech = high energy = perfect)
+  let score = 0;
+  if (wpm <= 0) {
+    score = 0;
+  } else if (wpm < min) {
+    // Below minimum: too slow = no energy
+    score = 0;
+  } else if (wpm >= min && wpm < ideal) {
+    // min → ideal: linear 0 → 100
+    score = ((wpm - min) / (ideal - min)) * 100;
+  } else {
+    // ideal and above: fast speech = high energy = 100%
+    score = 100;
   }
 
   return {
     wordsPerMinute: wpm,
     score: Math.min(100, Math.max(0, Math.round(score))),
     tag: "FLUENCY",
-    method,
+    method: actualMethod,
   };
 }
 
@@ -613,7 +791,9 @@ export async function analyzeAudioAsync(
   sampleRate: number,
   _audioBase64?: string,
   deviceId?: string,
-  vadMetrics?: VADMetrics
+  vadMetrics?: VADMetrics,
+  sttWordCount?: number,
+  audioBlob?: Blob
 ): Promise<AnalysisResult> {
   let processedBuffer = audioBuffer;
   let normalizationInfo = undefined;
@@ -662,7 +842,27 @@ export async function analyzeAudioAsync(
   const volume = analyzeVolume(audioBuffer, deviceDbOffset);
 
   // Other metrics: use LUFS-normalized buffer (they benefit from consistent levels)
-  const speechRate = analyzeSpeechRate(processedBuffer, sampleRate, vadMetrics);
+  // Check if Deepgram STT method is selected
+  const method = getSpeechRateMethod();
+  let deepgramWordCount: number | undefined;
+
+  if (method === 'deepgram-stt' && audioBlob) {
+    try {
+      console.log('🎙️ [analyzeAudioAsync] Using Deepgram STT for speech rate...');
+      const transcription = await transcribeAudio(audioBlob);
+      deepgramWordCount = transcription.words.length;
+      console.log(`✅ [analyzeAudioAsync] Deepgram transcribed ${deepgramWordCount} words`);
+    } catch (error) {
+      console.error('❌ [analyzeAudioAsync] Deepgram transcription failed:', error);
+      console.warn('⚠️ Falling back to spectral-flux method');
+      // deepgramWordCount remains undefined, will fall back to spectral-flux
+    }
+  }
+
+  // Use Deepgram word count if available, otherwise use sttWordCount from Web Speech API
+  const finalSttWordCount = deepgramWordCount ?? sttWordCount;
+
+  const speechRate = analyzeSpeechRate(processedBuffer, sampleRate, vadMetrics, finalSttWordCount);
   const acceleration = analyzeAcceleration(processedBuffer, sampleRate, vadMetrics);
   const responseTime = analyzeResponseTime(processedBuffer, sampleRate);
   const pauses = analyzePauses(processedBuffer, sampleRate, vadMetrics);

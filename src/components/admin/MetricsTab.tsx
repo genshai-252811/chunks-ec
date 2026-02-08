@@ -9,6 +9,13 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Slider } from '@/components/ui/slider';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -28,7 +35,7 @@ interface MetricSetting {
 
 const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
   { metric_id: 'volume', weight: 30, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
-  { metric_id: 'speechRate', weight: 30, min_threshold: 90, ideal_threshold: 150, max_threshold: 220, method: 'energy-peaks', enabled: true },
+  { metric_id: 'speechRate', weight: 30, min_threshold: 90, ideal_threshold: 150, max_threshold: 220, method: 'spectral-flux', enabled: true },
   { metric_id: 'acceleration', weight: 5, min_threshold: 0, ideal_threshold: 50, max_threshold: 100, method: null, enabled: true },
   { metric_id: 'responseTime', weight: 5, min_threshold: 2000, ideal_threshold: 200, max_threshold: 0, method: null, enabled: true },
   { metric_id: 'pauseManagement', weight: 10, min_threshold: 0, ideal_threshold: 0, max_threshold: 2.71, method: null, enabled: true },
@@ -74,7 +81,7 @@ export const MetricsTab = () => {
       } else {
         loadedMetrics = data.map(m => ({ ...m, enabled: m.weight > 0 }));
       }
-      
+
       setMetrics(loadedMetrics);
       setOriginalMetrics(JSON.parse(JSON.stringify(loadedMetrics)));
       setHasChanges(false);
@@ -98,13 +105,13 @@ export const MetricsTab = () => {
 
   const rebalanceWeights = (currentMetrics: MetricSetting[]): MetricSetting[] => {
     const enabledMetrics = currentMetrics.filter(m => m.enabled);
-    
+
     if (enabledMetrics.length === 0) {
       return currentMetrics;
     }
 
     const totalWeight = enabledMetrics.reduce((sum, m) => sum + m.weight, 0);
-    
+
     if (totalWeight === 100) {
       return currentMetrics;
     }
@@ -135,8 +142,8 @@ export const MetricsTab = () => {
           const wasEnabled = m.enabled;
           // If disabling, set weight to 0; if enabling, restore default weight
           const defaultMetric = DEFAULT_METRICS.find(d => d.metric_id === metricId);
-          return { 
-            ...m, 
+          return {
+            ...m,
             enabled: !wasEnabled,
             weight: !wasEnabled ? (defaultMetric?.weight || 20) : 0
           };
@@ -156,6 +163,12 @@ export const MetricsTab = () => {
   const handleThresholdChange = (metricId: string, field: 'min_threshold' | 'ideal_threshold' | 'max_threshold', value: number) => {
     setMetrics(prev =>
       prev.map(m => m.metric_id === metricId ? { ...m, [field]: value } : m)
+    );
+  };
+
+  const handleMethodChange = (metricId: string, method: string) => {
+    setMetrics(prev =>
+      prev.map(m => m.metric_id === metricId ? { ...m, method } : m)
     );
   };
 
@@ -187,7 +200,7 @@ export const MetricsTab = () => {
             max_threshold: m.max_threshold,
             method: m.method,
           }, { onConflict: 'metric_id' });
-        
+
         if (error) throw error;
       }
 
@@ -376,6 +389,38 @@ export const MetricsTab = () => {
                           className="h-8"
                         />
                       </div>
+                    </div>
+                  )}
+
+                  {/* Detection Method (speechRate only) */}
+                  {metric.enabled && metric.metric_id === 'speechRate' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Detection Method</Label>
+                      <Select
+                        value={metric.method || 'spectral-flux'}
+                        onValueChange={(value) => handleMethodChange(metric.metric_id, value)}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="energy-peaks">Energy Peaks (Basic)</SelectItem>
+                          <SelectItem value="vad-enhanced">VAD Enhanced (Better)</SelectItem>
+                          <SelectItem value="spectral-flux">Spectral Flux (Best)</SelectItem>
+                          <SelectItem value="web-speech-api">Web Speech API (Browser STT)</SelectItem>
+                          <SelectItem value="deepgram-stt">Deepgram STT (Most Accurate)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {metric.method === 'web-speech-api' && (
+                        <p className="text-xs text-muted-foreground">
+                          Uses browser speech recognition. Works best in Chrome/Edge.
+                        </p>
+                      )}
+                      {metric.method === 'deepgram-stt' && (
+                        <p className="text-xs text-muted-foreground">
+                          Uses Deepgram AI for most accurate transcription. Requires internet connection.
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>

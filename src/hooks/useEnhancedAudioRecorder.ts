@@ -2,6 +2,78 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { MicVAD } from '@ricky0123/vad-web';
 import { getSensitivity } from './useDisplaySettings';
 
+// Web Speech API type declarations
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  readonly length: number;
+  readonly isFinal: boolean;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string;
+  readonly message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+declare global {
+  interface Window {
+    webkitSpeechRecognition: new () => SpeechRecognition;
+    SpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
+// Helper: read speech rate method from localStorage metricConfig
+function getSpeechRateMethodFromConfig(): string {
+  try {
+    const raw = localStorage.getItem('metricConfig');
+    if (!raw) return 'spectral-flux';
+    const configs = JSON.parse(raw);
+    const speechRateConfig = Array.isArray(configs)
+      ? configs.find((c: any) => c.id === 'speechRate')
+      : null;
+    return speechRateConfig?.method || 'spectral-flux';
+  } catch {
+    return 'spectral-flux';
+  }
+}
+
+// Helper: read STT language from localStorage
+function getSttLanguageFromConfig(): string {
+  try {
+    return localStorage.getItem('sttLanguage') || 'en-US';
+  } catch {
+    return 'en-US';
+  }
+}
+
 export interface SpeechSegment {
   start: number;
   end: number;
@@ -29,6 +101,10 @@ interface EnhancedAudioRecorderState {
   isVADReady: boolean;
   deviceId: string | null;
   deviceLabel: string | null;
+  sttWordCount: number;
+  sttTranscript: string;
+  sttSupported: boolean;
+  sttError: string | null;
 }
 
 interface UseEnhancedAudioRecorderReturn extends EnhancedAudioRecorderState {
@@ -61,6 +137,10 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
     isVADReady: false,
     deviceId: null,
     deviceLabel: null,
+    sttWordCount: 0,
+    sttTranscript: '',
+    sttSupported: typeof window !== 'undefined' && !!(window.webkitSpeechRecognition || window.SpeechRecognition),
+    sttError: null,
   });
 
   // Audio recording refs
@@ -81,6 +161,12 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
   const speechSegmentsRef = useRef<SpeechSegment[]>([]);
   const totalSpeechTimeRef = useRef<number>(0);
   const totalSilenceTimeRef = useRef<number>(0);
+
+  // STT (Web Speech API) refs
+  const sttRef = useRef<SpeechRecognition | null>(null);
+  const sttWordCountRef = useRef<number>(0);
+  const sttTranscriptRef = useRef<string>('');
+  const isRecordingRef = useRef<boolean>(false); // track recording state for STT onend restart
 
   const updateAudioLevel = useCallback(() => {
     if (analyzerRef.current) {
@@ -228,6 +314,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
         setState((prev) => ({ ...prev, recordingTime: prev.recordingTime + 1 }));
       }, 1000);
 
+      isRecordingRef.current = true;
+
       setState((prev) => ({
         ...prev,
         isRecording: true,
@@ -235,7 +323,64 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
         recordingTime: 0,
         deviceId,
         deviceLabel,
+        sttWordCount: 0,
+        sttTranscript: '',
+        sttError: null,
       }));
+
+      // Start Web Speech API if method is configured as "web-speech-api"
+      const sttMethod = getSpeechRateMethodFromConfig();
+      const hasSttSupport = typeof window !== 'undefined' && !!(window.webkitSpeechRecognition || window.SpeechRecognition);
+
+      if (sttMethod === 'web-speech-api' && hasSttSupport) {
+        try {
+          const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+          const recognition = new SpeechRecognitionCtor();
+          recognition.continuous = true;
+          recognition.interimResults = false;
+          recognition.lang = getSttLanguageFromConfig();
+
+          recognition.onresult = (event: SpeechRecognitionEvent) => {
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              if (event.results[i].isFinal) {
+                const transcript = event.results[i][0].transcript.trim();
+                if (transcript) {
+                  const wordCount = transcript.split(/\s+/).filter(Boolean).length;
+                  sttWordCountRef.current += wordCount;
+                  sttTranscriptRef.current += (sttTranscriptRef.current ? ' ' : '') + transcript;
+                  console.log(`🗣️ STT: "${transcript}" (+${wordCount} words, total=${sttWordCountRef.current})`);
+                }
+              }
+            }
+          };
+
+          recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            // "no-speech" and "aborted" are expected, don't treat as errors
+            if (event.error === 'no-speech' || event.error === 'aborted') return;
+            console.warn('🗣️ STT error:', event.error, event.message);
+            setState(prev => ({ ...prev, sttError: event.error }));
+          };
+
+          // Chrome stops recognition after ~60s of silence; auto-restart if still recording
+          recognition.onend = () => {
+            if (isRecordingRef.current && sttRef.current) {
+              try {
+                console.log('🗣️ STT: auto-restarting (Chrome timeout)');
+                sttRef.current.start();
+              } catch (e) {
+                // Already started or other issue — ignore
+              }
+            }
+          };
+
+          sttRef.current = recognition;
+          recognition.start();
+          console.log('🗣️ Web Speech API started (lang=' + recognition.lang + ')');
+        } catch (err) {
+          console.warn('🗣️ Failed to start Web Speech API:', err);
+          setState(prev => ({ ...prev, sttError: 'Failed to start speech recognition' }));
+        }
+      }
 
       // Cleanup function for level interval
       mediaRecorder.onstop = () => {
@@ -252,6 +397,18 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
 
   const stopRecording = useCallback(async () => {
     return new Promise<void>((resolve) => {
+      isRecordingRef.current = false;
+
+      // Stop Web Speech API
+      if (sttRef.current) {
+        try {
+          sttRef.current.abort();
+        } catch (e) {
+          // ignore
+        }
+        sttRef.current = null;
+      }
+
       // Stop VAD
       if (vadRef.current) {
         vadRef.current.pause();
@@ -299,6 +456,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
                     totalSilenceTime: totalSilenceTimeRef.current,
                     speechRatio,
                   },
+                  sttWordCount: sttWordCountRef.current,
+                  sttTranscript: sttTranscriptRef.current,
                 }));
 
                 resolve();
@@ -332,6 +491,8 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
     totalSpeechTimeRef.current = 0;
     totalSilenceTimeRef.current = 0;
     speechProbabilityRef.current = 0;
+    sttWordCountRef.current = 0;
+    sttTranscriptRef.current = '';
 
     setState({
       isRecording: false,
@@ -345,6 +506,10 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
       isVADReady: false,
       deviceId: null,
       deviceLabel: null,
+      sttWordCount: 0,
+      sttTranscript: '',
+      sttSupported: typeof window !== 'undefined' && !!(window.webkitSpeechRecognition || window.SpeechRecognition),
+      sttError: null,
     });
   }, []);
 
@@ -359,6 +524,7 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isRecordingRef.current = false;
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -371,6 +537,10 @@ export function useEnhancedAudioRecorder(): UseEnhancedAudioRecorderReturn {
       if (vadRef.current) {
         vadRef.current.pause();
         vadRef.current.destroy();
+      }
+      if (sttRef.current) {
+        try { sttRef.current.abort(); } catch (e) { /* ignore */ }
+        sttRef.current = null;
       }
     };
   }, []);
