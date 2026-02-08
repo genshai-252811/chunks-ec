@@ -63,7 +63,9 @@ function getMetricConfig(id: string): MetricConfig | undefined {
 
 function getSpeechRateMethod(): SpeechRateMethod {
   const config = getMetricConfig("speechRate");
-  return config?.method || "spectral-flux";
+  const method = config?.method || "spectral-flux";
+  console.log(`🔧 [audioAnalysis] speechRate config method: ${config?.method}, resolved: ${method}`);
+  return method as SpeechRateMethod;
 }
 
 export interface VolumeResult {

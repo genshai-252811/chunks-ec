@@ -59,7 +59,9 @@ function getSpeechRateMethodFromConfig(): string {
     const speechRateConfig = Array.isArray(configs)
       ? configs.find((c: any) => c.id === 'speechRate')
       : null;
-    return speechRateConfig?.method || 'spectral-flux';
+    const method = speechRateConfig?.method;
+    console.log('🔧 [STT Config] speechRate method from localStorage:', method);
+    return method || 'spectral-flux';
   } catch {
     return 'spectral-flux';
   }
