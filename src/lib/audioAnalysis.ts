@@ -2,7 +2,7 @@
 // NOTE: This file contains the CORE ANALYSIS LOGIC that must NOT be changed
 
 import { calibrateAndNormalize, calculateNoiseFloor, getCalibrationProfile, TARGET_LUFS } from './lufsNormalization';
-import { VADMetrics, analyzeVAD } from './vad';
+// VADMetrics is defined locally below; analyzeVAD removed (module './vad' doesn't exist)
 import { transcribeAudio, calculateWPMFromTranscription } from './deepgramService';
 
 // VAD Metrics interface (from useEnhancedAudioRecorder)
@@ -367,7 +367,7 @@ function detectSyllablesWithSpectralFlux(
 
     const timeMs = (i / sampleRate) * 1000;
     fluxValues.push({ flux, timeMs });
-    prevSpectrum = spectrum;
+    prevSpectrum = new Float32Array(spectrum) as Float32Array<ArrayBuffer>;
   }
 
   if (fluxValues.length === 0) return 0;

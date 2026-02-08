@@ -99,8 +99,8 @@ serve(async (req) => {
         console.error('❌ Error in transcribe function:', error)
         return new Response(
             JSON.stringify({
-                error: error.message || 'Internal server error',
-                details: error.toString()
+        error: (error as Error).message || 'Internal server error',
+        details: String(error)
             }),
             {
                 status: 500,
