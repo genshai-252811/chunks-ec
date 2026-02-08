@@ -1,18 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Save, RotateCcw, Info } from 'lucide-react';
+import { Loader2, Save, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
+import { MetricWeightDistribution } from '@/components/MetricWeightDistribution';
 
 const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
   { metric_id: 'volume', weight: 30, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
@@ -299,51 +294,7 @@ export const MetricsTab = () => {
       </div>
 
       {/* Weight Distribution Visual */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Weight Distribution</CardTitle>
-          <CardDescription>Visual allocation of metric weights</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Total Weight</span>
-            <span className={`text-lg font-bold ${totalWeight === 100 ? 'text-green-600' : 'text-orange-600'}`}>
-              {totalWeight}%
-            </span>
-          </div>
-          <div className="h-6 bg-secondary rounded-full overflow-hidden flex">
-            {metrics.map(metric => {
-              if (!metric.enabled || metric.weight === 0) return null;
-              const label = METRIC_LABELS[metric.metric_id];
-              return (
-                <TooltipProvider key={metric.metric_id}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        className={`${label?.color || 'bg-gray-500'} flex items-center justify-center text-xs text-white font-medium transition-all`}
-                        style={{ width: `${metric.weight}%` }}
-                      >
-                        {metric.weight >= 10 && `${metric.weight}%`}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{label?.name}: {metric.weight}%</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              );
-            })}
-          </div>
-          {totalWeight !== 100 && (
-            <div className="mt-2 flex items-center gap-2">
-              <Info className="w-4 h-4 text-orange-600" />
-              <span className="text-xs text-orange-600">
-                Weights should total 100%. Click "Rebalance" to auto-adjust.
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <MetricWeightDistribution metrics={metrics} metricLabels={METRIC_LABELS} />
 
       {/* Actions Bar */}
       <div className="flex flex-wrap gap-2 justify-between items-center">
