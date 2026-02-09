@@ -12,8 +12,12 @@ export interface PracticeResult {
   energy_score: number | null;
   clarity_score: number | null;
   pace_score: number | null;
+  acceleration_score: number | null;
+  response_time_score: number | null;
   volume_avg: number | null;
   speech_ratio: number | null;
+  response_time_ms: number | null;
+  words_per_minute: number | null;
   eye_contact_score: number | null;
   hand_movement_score: number | null;
   blink_rate: number | null;
@@ -26,9 +30,25 @@ export interface VideoMetrics {
   blinkRate?: number;
 }
 
+export interface UserStats {
+  totalSessions: number;
+  avgScore: number;
+  bestScore: number;
+  totalPracticeSeconds: number;
+  firstSessionAt: string | null;
+  lastSessionAt: string | null;
+  avgEnergy: number | null;
+  avgClarity: number | null;
+  avgPace: number | null;
+  avgAcceleration: number | null;
+  avgResponseTime: number | null;
+}
+
 export function usePracticeResults() {
   const [results, setResults] = useState<PracticeResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const saveResult = useCallback(async (
@@ -38,7 +58,7 @@ export function usePracticeResults() {
     videoMetrics?: VideoMetrics
   ) => {
     setError(null);
-    
+
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -56,8 +76,12 @@ export function usePracticeResults() {
         energy_score: analysisResult.volume?.score ?? null,
         clarity_score: analysisResult.speechRate?.score ?? null,
         pace_score: analysisResult.pauses?.score ?? null,
+        acceleration_score: analysisResult.acceleration?.score ?? null,
+        response_time_score: analysisResult.responseTime?.score ?? null,
         volume_avg: analysisResult.volume?.averageDb ?? null,
         speech_ratio: analysisResult.pauses?.pauseRatio ?? null,
+        response_time_ms: analysisResult.responseTime?.responseTimeMs ?? null,
+        words_per_minute: analysisResult.speechRate?.wordsPerMinute ?? null,
         eye_contact_score: videoMetrics?.eyeContactScore ?? null,
         hand_movement_score: videoMetrics?.handMovementScore ?? null,
         blink_rate: videoMetrics?.blinkRate ?? null,
@@ -95,28 +119,52 @@ export function usePracticeResults() {
     return { data, error: fetchError };
   }, []);
 
-  const getStats = useCallback(() => {
-    if (results.length === 0) return null;
+  const fetchStats = useCallback(async () => {
+    setIsLoadingStats(true);
 
-    const totalSessions = results.length;
-    const avgScore = results.reduce((sum, r) => sum + r.score, 0) / totalSessions;
-    const bestScore = Math.max(...results.map(r => r.score));
-    const totalPracticeTime = results.reduce((sum, r) => sum + Number(r.duration_seconds), 0);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setIsLoadingStats(false);
+      return null;
+    }
 
-    return {
-      totalSessions,
-      avgScore: Math.round(avgScore),
-      bestScore,
-      totalPracticeTime: Math.round(totalPracticeTime),
+    const { data, error: rpcError } = await supabase
+      .rpc('get_user_practice_stats', { p_user_id: user.id });
+
+    if (rpcError) {
+      console.error('Failed to fetch user stats:', rpcError);
+      setIsLoadingStats(false);
+      return null;
+    }
+
+    const raw = data as any;
+    const userStats: UserStats = {
+      totalSessions: raw?.total_sessions ?? 0,
+      avgScore: raw?.avg_score ?? 0,
+      bestScore: raw?.best_score ?? 0,
+      totalPracticeSeconds: raw?.total_practice_seconds ?? 0,
+      firstSessionAt: raw?.first_session_at ?? null,
+      lastSessionAt: raw?.last_session_at ?? null,
+      avgEnergy: raw?.avg_energy ?? null,
+      avgClarity: raw?.avg_clarity ?? null,
+      avgPace: raw?.avg_pace ?? null,
+      avgAcceleration: raw?.avg_acceleration ?? null,
+      avgResponseTime: raw?.avg_response_time ?? null,
     };
-  }, [results]);
+
+    setStats(userStats);
+    setIsLoadingStats(false);
+    return userStats;
+  }, []);
 
   return {
     results,
     isLoading,
+    isLoadingStats,
     error,
+    stats,
     saveResult,
     fetchResults,
-    getStats,
+    fetchStats,
   };
 }

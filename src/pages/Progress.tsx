@@ -22,7 +22,7 @@ import { format, subDays, startOfDay } from 'date-fns';
 const Progress = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { results, isLoading, fetchResults, getStats } = usePracticeResults();
+  const { results, isLoading, isLoadingStats, fetchResults, fetchStats, stats } = usePracticeResults();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -32,11 +32,10 @@ const Progress = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchResults(100); // Fetch more for charts
+      fetchResults(100); // For chart data (14-day window)
+      fetchStats();      // Server-side aggregation (all sessions)
     }
-  }, [isAuthenticated, fetchResults]);
-
-  const stats = getStats();
+  }, [isAuthenticated, fetchResults, fetchStats]);
 
   // Prepare chart data - last 14 days
   const chartData = (() => {
@@ -67,7 +66,7 @@ const Progress = () => {
   // Recent sessions for the list
   const recentSessions = results.slice(0, 10);
 
-  if (authLoading || isLoading) {
+  if (authLoading || isLoading || isLoadingStats) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -155,7 +154,7 @@ const Progress = () => {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">
-                    {stats?.totalPracticeTime ? Math.round(stats.totalPracticeTime / 60) : 0}
+                    {stats?.totalPracticeSeconds ? Math.round(stats.totalPracticeSeconds / 60) : 0}
                   </p>
                   <p className="text-xs text-muted-foreground">Minutes</p>
                 </div>
@@ -303,9 +302,16 @@ const Progress = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <p>Energy: {session.energy_score ? Math.round(Number(session.energy_score)) : '-'}</p>
-                        <p>Clarity: {session.clarity_score ? Math.round(Number(session.clarity_score)) : '-'}</p>
+                      <div className="text-right text-xs text-muted-foreground space-y-0.5">
+                        <div className="flex gap-2 justify-end">
+                          <span>Power: {session.energy_score != null ? Math.round(Number(session.energy_score)) : '-'}</span>
+                          <span>Tempo: {session.clarity_score != null ? Math.round(Number(session.clarity_score)) : '-'}</span>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <span>Flow: {session.pace_score != null ? Math.round(Number(session.pace_score)) : '-'}</span>
+                          <span>Boost: {session.acceleration_score != null ? Math.round(Number(session.acceleration_score)) : '-'}</span>
+                          <span>Spark: {session.response_time_score != null ? Math.round(Number(session.response_time_score)) : '-'}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
