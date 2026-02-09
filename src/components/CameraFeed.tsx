@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, VideoOff, Eye, EyeOff, Grid3X3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FloatingEnergyIndicator } from './FloatingEnergyIndicator';
-import { FaceTrackingOverlay } from './FaceTrackingOverlay';
+import { CanvasFaceOverlay } from './CanvasFaceOverlay';
 import { useFaceTracking, FaceTrackingMetrics } from '@/hooks/useFaceTracking';
 import { Button } from '@/components/ui/button';
 import { areVideoMetricsEnabled } from '@/lib/metricUtils';
@@ -36,7 +36,7 @@ export function CameraFeed({
     isTracking,
     isModelLoaded,
     metrics: faceMetrics,
-    currentFace,
+    getCurrentFace,
     startTracking,
     stopTracking,
     processFrame
@@ -124,7 +124,7 @@ export function CameraFeed({
 
     let frameId: number;
     let lastTime = 0;
-    const targetInterval = 66; // ~15fps
+    const targetInterval = 16; // ~60fps (inference throttled inside processFrame)
 
     const loop = (time: number) => {
       if (time - lastTime >= targetInterval) {
@@ -143,12 +143,12 @@ export function CameraFeed({
     };
   }, [isTracking, processFrame]);
 
-  // Report face metrics to parent
+  // Report face metrics to parent (always update when metrics change, not just during tracking)
   useEffect(() => {
-    if (onFaceMetricsUpdate && isTracking) {
+    if (onFaceMetricsUpdate && faceMetrics) {
       onFaceMetricsUpdate(faceMetrics);
     }
-  }, [faceMetrics, isTracking, onFaceMetricsUpdate]);
+  }, [faceMetrics, onFaceMetricsUpdate]);
 
   const glowIntensity = isRecording ? Math.min(audioLevel / 100, 1) : 0;
 
@@ -171,10 +171,10 @@ export function CameraFeed({
         style={{ transform: 'scaleX(-1)' }}
       />
 
-      {/* Face Tracking Overlay */}
+      {/* Face Tracking Overlay (Canvas-based for performance) */}
       {videoMetricsEnabled && showMesh && (
-        <FaceTrackingOverlay
-          face={currentFace}
+        <CanvasFaceOverlay
+          getCurrentFace={getCurrentFace}
           isTracking={isTracking}
           isModelLoaded={isModelLoaded}
           videoWidth={videoDimensions.width}

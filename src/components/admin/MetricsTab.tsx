@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
 import { MetricWeightDistribution } from '@/components/MetricWeightDistribution';
+import { CalibrationWizard } from '@/components/CalibrationWizard';
+import { CalibrationTest } from '@/components/CalibrationTest';
 
 const DEFAULT_METRICS: Omit<MetricSetting, 'id'>[] = [
   { metric_id: 'volume', weight: 30, min_threshold: -35, ideal_threshold: -15, max_threshold: 0, method: null, enabled: true },
@@ -174,6 +176,7 @@ export const MetricsTab = () => {
 
   const handleSave = async () => {
     const rebalanced = rebalanceWeights(metrics);
+    setMetrics(rebalanced);
     setIsSaving(true);
     try {
       // Use upsert instead of delete+insert to avoid unique constraint issues
@@ -292,6 +295,12 @@ export const MetricsTab = () => {
           )}
         </Button>
       </div>
+
+      {/* Device Calibration */}
+      <CalibrationWizard />
+
+      {/* Test Calibration */}
+      <CalibrationTest />
 
       {/* Weight Distribution Visual */}
       <MetricWeightDistribution metrics={metrics} metricLabels={METRIC_LABELS} />

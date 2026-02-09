@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -9,43 +9,65 @@ import { useRealtimeAudio } from '@/hooks/useRealtimeAudio';
 import {
   CalibrationProfile,
   getCalibrationProfile,
+  getCalibrationProfiles,
   saveCalibrationProfile,
+  createCalibrationProfile,
 } from '@/lib/lufsNormalization';
 import { toast } from 'sonner';
 
 export function CalibrationTest() {
   const [isTestMode, setIsTestMode] = useState(false);
   const [currentProfile, setCurrentProfile] = useState<CalibrationProfile | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceLabel, setDeviceLabel] = useState<string>('');
   const [manualGain, setManualGain] = useState<number>(1.0);
   const [hasChanges, setHasChanges] = useState(false);
 
   const { audioLevel, lufs, isActive, error } = useRealtimeAudio(isTestMode);
 
-  // Load current calibration profile
+  // Load profile from localStorage on mount (no mic permission needed)
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioTrack = stream.getAudioTracks()[0];
-        const deviceId = audioTrack.getSettings().deviceId || 'default';
-        stream.getTracks().forEach(track => track.stop());
-
-        const profile = getCalibrationProfile(deviceId);
-        setCurrentProfile(profile);
-        if (profile) {
-          setManualGain(profile.gainAdjustment);
-        }
-      } catch (err) {
-        console.error('Failed to load calibration profile:', err);
-      }
-    };
-
-    loadProfile();
+    const profiles = getCalibrationProfiles();
+    if (profiles.length > 0) {
+      const profile = profiles[0]; // Use most recent / first profile
+      setCurrentProfile(profile);
+      setDeviceId(profile.deviceId);
+      setDeviceLabel(profile.deviceLabel);
+      setManualGain(profile.gainAdjustment);
+    }
   }, []);
 
-  const handleToggleTest = () => {
-    setIsTestMode(!isTestMode);
-  };
+  // When test mode starts, detect actual device and reload profile
+  const handleToggleTest = useCallback(async () => {
+    if (isTestMode) {
+      setIsTestMode(false);
+      return;
+    }
+
+    // Start test mode - detect device from mic stream
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioTrack = stream.getAudioTracks()[0];
+      const detectedDeviceId = audioTrack.getSettings().deviceId || 'default';
+      const detectedLabel = audioTrack.label || 'Microphone';
+      stream.getTracks().forEach(track => track.stop());
+
+      setDeviceId(detectedDeviceId);
+      setDeviceLabel(detectedLabel);
+
+      const profile = getCalibrationProfile(detectedDeviceId);
+      if (profile) {
+        setCurrentProfile(profile);
+        if (!hasChanges) {
+          setManualGain(profile.gainAdjustment);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to detect device:', err);
+    }
+
+    setIsTestMode(true);
+  }, [isTestMode, hasChanges]);
 
   const handleGainChange = (value: number[]) => {
     setManualGain(value[0]);
@@ -53,27 +75,38 @@ export function CalibrationTest() {
   };
 
   const handleSaveGain = () => {
-    if (!currentProfile) {
-      toast.error('No calibration profile found. Please calibrate first.');
+    if (currentProfile) {
+      // Update existing profile
+      const updatedProfile: CalibrationProfile = {
+        ...currentProfile,
+        gainAdjustment: manualGain,
+      };
+      saveCalibrationProfile(updatedProfile);
+      setCurrentProfile(updatedProfile);
+    } else if (deviceId) {
+      // Create new profile with manual gain
+      const newProfile = createCalibrationProfile(
+        deviceId,
+        deviceLabel || 'Unknown Device',
+        -40, // default noise floor
+        -23, // default reference level (target LUFS)
+      );
+      newProfile.gainAdjustment = manualGain;
+      saveCalibrationProfile(newProfile);
+      setCurrentProfile(newProfile);
+    } else {
+      toast.error('Start Test Mode first to detect your microphone.');
       return;
     }
 
-    const updatedProfile: CalibrationProfile = {
-      ...currentProfile,
-      gainAdjustment: manualGain,
-    };
-
-    saveCalibrationProfile(updatedProfile);
-    setCurrentProfile(updatedProfile);
     setHasChanges(false);
     toast.success('Manual gain adjustment saved!');
   };
 
   const handleReset = () => {
-    if (currentProfile) {
-      setManualGain(currentProfile.gainAdjustment);
-      setHasChanges(false);
-    }
+    const resetValue = currentProfile ? currentProfile.gainAdjustment : 1.0;
+    setManualGain(resetValue);
+    setHasChanges(false);
   };
 
   const adjustedLUFS = lufs !== null ? lufs + (20 * Math.log10(manualGain)) : null;
@@ -111,7 +144,7 @@ export function CalibrationTest() {
 
         {!currentProfile && (
           <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
-            No calibration profile found. Please calibrate your device first.
+            No calibration profile found. You can still test and adjust gain manually — a profile will be created when you save.
           </div>
         )}
 
@@ -157,10 +190,10 @@ export function CalibrationTest() {
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm space-y-2">
                 <div className="font-medium text-blue-900">Live Feedback:</div>
                 <div className="text-blue-800">
-                  {adjustedLUFS < -28 && "🔉 Too quiet - speak louder or increase gain"}
-                  {adjustedLUFS >= -28 && adjustedLUFS < -20 && "✅ Good level - within target range"}
-                  {adjustedLUFS >= -20 && adjustedLUFS < -15 && "⚠️ Slightly loud - consider reducing gain"}
-                  {adjustedLUFS >= -15 && "🔊 Too loud - reduce gain or speak softer"}
+                  {adjustedLUFS < -28 && "Too quiet - speak louder or increase gain"}
+                  {adjustedLUFS >= -28 && adjustedLUFS < -20 && "Good level - within target range"}
+                  {adjustedLUFS >= -20 && adjustedLUFS < -15 && "Slightly loud - consider reducing gain"}
+                  {adjustedLUFS >= -15 && "Too loud - reduce gain or speak softer"}
                 </div>
               </div>
             )}
@@ -180,7 +213,6 @@ export function CalibrationTest() {
             max={2.0}
             step={0.01}
             className="w-full"
-            disabled={!currentProfile}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>0.5x (Quieter)</span>
@@ -208,7 +240,7 @@ export function CalibrationTest() {
           <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
             <li>Click "Start Test Mode" to begin monitoring</li>
             <li>Speak normally and watch the LUFS reading</li>
-            <li>Adjust the gain slider if needed to reach -23 LUFS target</li>
+            <li>Adjust the gain slider to reach -23 LUFS target</li>
             <li>Click "Save Adjustment" to apply your changes</li>
             <li>Test again to verify the adjustment</li>
           </ol>

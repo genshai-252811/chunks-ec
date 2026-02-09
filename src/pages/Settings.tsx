@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MetricSettingsCard, MetricSetting } from '@/components/MetricSettingsCard';
 import { MetricWeightDistribution } from '@/components/MetricWeightDistribution';
 import { CalibrationWizard } from '@/components/CalibrationWizard';
+import { CalibrationTest } from '@/components/CalibrationTest';
 import { rebalanceWeights } from '@/lib/metricsUtils';
 
 const METRIC_LABELS: Record<string, { name: string; description: string; unit: string; color: string; category: 'audio' | 'video' }> = {
@@ -187,20 +188,15 @@ export default function Settings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Normalize weights
-      const normalizedMetrics = metrics.map(m => ({
-        ...m,
-        weight: m.weight, // Users can set arbitrary weights, normalization happens on load/display or we trust their setting?
-        enabled: m.enabled
-      }));
-
+      // Auto-rebalance weights to 100% before saving
+      const rebalanced = rebalanceWeights(metrics);
+      setMetrics(rebalanced);
 
       // Upsert into user_metric_settings
-      // We need to upsert by (user_id, metric_id)
-      const updates = normalizedMetrics.map(m => ({
+      const updates = rebalanced.map(m => ({
         user_id: user.id,
         metric_id: m.metric_id,
-        weight: m.weight,
+        weight: m.enabled ? m.weight : 0,
         enabled: m.enabled,
         min_threshold: m.min_threshold,
         ideal_threshold: m.ideal_threshold,
@@ -215,7 +211,7 @@ export default function Settings() {
       if (error) throw error;
 
       // Update localStorage to reflect new user settings immediately
-      const localConfig = normalizedMetrics.map(m => ({
+      const localConfig = rebalanced.map(m => ({
         id: m.metric_id,
         weight: m.enabled ? m.weight : 0,
         enabled: m.enabled,
@@ -291,6 +287,9 @@ export default function Settings() {
 
         {/* Device Calibration */}
         <CalibrationWizard />
+
+        {/* Test Calibration */}
+        <CalibrationTest />
 
         {/* Weight Distribution Visualization */}
         <MetricWeightDistribution metrics={metrics} metricLabels={METRIC_LABELS} />
