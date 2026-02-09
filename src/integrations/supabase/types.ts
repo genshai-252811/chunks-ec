@@ -100,7 +100,6 @@ export type Database = {
       }
       practice_results: {
         Row: {
-          acceleration_score: number | null
           blink_rate: number | null
           clarity_score: number | null
           created_at: string
@@ -110,17 +109,13 @@ export type Database = {
           hand_movement_score: number | null
           id: string
           pace_score: number | null
-          response_time_ms: number | null
-          response_time_score: number | null
           score: number
           sentence_id: string | null
           speech_ratio: number | null
           user_id: string
           volume_avg: number | null
-          words_per_minute: number | null
         }
         Insert: {
-          acceleration_score?: number | null
           blink_rate?: number | null
           clarity_score?: number | null
           created_at?: string
@@ -130,17 +125,13 @@ export type Database = {
           hand_movement_score?: number | null
           id?: string
           pace_score?: number | null
-          response_time_ms?: number | null
-          response_time_score?: number | null
           score: number
           sentence_id?: string | null
           speech_ratio?: number | null
           user_id: string
           volume_avg?: number | null
-          words_per_minute?: number | null
         }
         Update: {
-          acceleration_score?: number | null
           blink_rate?: number | null
           clarity_score?: number | null
           created_at?: string
@@ -150,14 +141,11 @@ export type Database = {
           hand_movement_score?: number | null
           id?: string
           pace_score?: number | null
-          response_time_ms?: number | null
-          response_time_score?: number | null
           score?: number
           sentence_id?: string | null
           speech_ratio?: number | null
           user_id?: string
           volume_avg?: number | null
-          words_per_minute?: number | null
         }
         Relationships: [
           {
@@ -285,12 +273,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_user_practice_stats: {
-        Args: {
-          p_user_id: string
-        }
-        Returns: Json
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
