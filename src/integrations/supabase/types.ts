@@ -285,6 +285,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_all_learner_stats: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      get_learner_results: {
+        Args: {
+          p_user_id: string
+          p_limit?: number
+        }
+        Returns: Database["public"]["Tables"]["practice_results"]["Row"][]
+      }
       get_user_practice_stats: { Args: { p_user_id: string }; Returns: Json }
       has_role: {
         Args: {

@@ -22,6 +22,9 @@ export interface PracticeResult {
   hand_movement_score: number | null;
   blink_rate: number | null;
   created_at: string;
+  // Joined from sentences table
+  sentence_category: string | null;
+  sentence_english: string | null;
 }
 
 export interface VideoMetrics {
@@ -102,9 +105,10 @@ export function usePracticeResults() {
     setIsLoading(true);
     setError(null);
 
+    // Join with sentences table to get category and english text
     const { data, error: fetchError } = await supabase
       .from('practice_results')
-      .select('*')
+      .select('*, sentences(category, english)')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -112,7 +116,14 @@ export function usePracticeResults() {
       console.error('Failed to fetch practice results:', fetchError);
       setError(fetchError.message);
     } else {
-      setResults(data || []);
+      // Flatten the joined sentence data into the result
+      const mapped: PracticeResult[] = (data || []).map((row: any) => ({
+        ...row,
+        sentence_category: row.sentences?.category ?? null,
+        sentence_english: row.sentences?.english ?? null,
+        sentences: undefined, // Remove nested object
+      }));
+      setResults(mapped);
     }
 
     setIsLoading(false);
